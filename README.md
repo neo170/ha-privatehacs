@@ -51,6 +51,9 @@ after updating an already loaded integration so Python imports use the new code.
 Newly installed integrations are made discoverable in **Settings > Devices &
 services** immediately.
 
+After updating **PrivateHACS** itself through HACS, restart Home Assistant. The
+sidebar then loads the panel code that belongs to the installed version.
+
 PrivateHACS also reads local `custom_components` manifests. If a displayed
 repository contains an integration already installed by HACS or another method,
 the sidebar shows the installed and current GitHub manifest versions for

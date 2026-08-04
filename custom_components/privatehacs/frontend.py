@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from homeassistant.components.frontend import (
@@ -24,8 +25,8 @@ from .const import (
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Serve and register the admin-only PrivateHACS panel."""
     domain_data = hass.data[DOMAIN]
+    frontend_path = Path(__file__).parent / "frontend"
     if not domain_data.get(DATA_PANEL_STATIC_REGISTERED):
-        frontend_path = Path(__file__).parent / "frontend"
         await hass.http.async_register_static_paths(
             [StaticPathConfig(f"/{DOMAIN}_static", str(frontend_path), False)]
         )
@@ -43,7 +44,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         config={
             "_panel_custom": {
                 "name": PANEL_COMPONENT_NAME,
-                "module_url": PANEL_MODULE_URL,
+                "module_url": _frontend_module_url(frontend_path),
                 "embed_iframe": False,
                 "trust_external": False,
             }
@@ -56,3 +57,13 @@ def async_unregister_panel(hass: HomeAssistant) -> None:
     """Remove the sidebar item when no PrivateHACS account remains."""
     if async_panel_exists(hass, PANEL_URL_PATH):
         async_remove_panel(hass, PANEL_URL_PATH)
+
+
+def _frontend_module_url(frontend_path: Path) -> str:
+    """Return a cache-busted module URL for the current panel asset."""
+    try:
+        content = (frontend_path / "privatehacs-panel.js").read_bytes()
+    except OSError:
+        return PANEL_MODULE_URL
+
+    return f"{PANEL_MODULE_URL}?v={hashlib.sha256(content).hexdigest()[:12]}"
