@@ -64,6 +64,7 @@ class _Hass:
         self.config = types.SimpleNamespace(
             path=lambda *parts: str(config_path.joinpath(*parts))
         )
+        self.data = {}
 
     async def async_add_executor_job(self, func, *args):
         return func(*args)
@@ -92,6 +93,46 @@ class _Store:
 
     def get(self, _):
         return None
+
+
+class _InstallClient:
+    repository = GitHubRepository(
+        full_name="owner/ha-example",
+        description=None,
+        default_branch="main",
+        html_url="https://example.test/owner/ha-example",
+        updated_at=None,
+        archived=False,
+    )
+
+    async def async_get_repository(self, _):
+        return self.repository
+
+    async def async_get_commit_sha(self, *_):
+        return "commit-sha"
+
+    async def async_download_archive(self, *_):
+        return b"archive"
+
+
+class _InstallStore(_Store):
+    def __init__(self) -> None:
+        self.record = None
+
+    async def async_upsert(self, record) -> None:
+        self.record = record
+
+
+class _Installer:
+    def __init__(self, custom_components_path: Path) -> None:
+        self.custom_components_path = custom_components_path
+        self.allowed_existing: set[str] | None = None
+
+    def inspect_archive(self, _):
+        return types.SimpleNamespace(domains=("example",))
+
+    def install_archive(self, _, allowed_existing: set[str]) -> None:
+        self.allowed_existing = allowed_existing
 
 
 def test_externally_managed_integration_is_not_advertised_as_updatable(
@@ -128,3 +169,23 @@ def test_externally_managed_integration_is_not_advertised_as_updatable(
             "update_available": False,
         }
     ]
+
+
+def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
+    """A successful first install tells the panel to request a restart."""
+    async def async_get_custom_components(_):
+        return {}
+
+    manager_module.loader.DATA_CUSTOM_COMPONENTS = "custom_components"
+    manager_module.loader.async_get_custom_components = async_get_custom_components
+    store = _InstallStore()
+    manager = PrivateHacsManager(_Hass(tmp_path), _InstallClient(), store)
+    installer = _Installer(tmp_path / "custom_components")
+    manager._installer = installer
+
+    result = asyncio.run(manager.async_install_repository("owner/ha-example"))
+
+    assert result["restart_required"] is True
+    assert installer.allowed_existing == set()
+    assert store.record is not None
+    assert store.record.commit_sha == "commit-sha"

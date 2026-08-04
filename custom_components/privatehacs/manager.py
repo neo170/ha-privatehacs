@@ -168,7 +168,7 @@ class PrivateHacsManager:
                 "full_name": record.full_name,
                 "domains": list(record.domains),
                 "commit": record.commit_sha,
-                "restart_required": current is not None,
+                "restart_required": True,
             }
 
     def _domain_owners(self) -> dict[str, str]:

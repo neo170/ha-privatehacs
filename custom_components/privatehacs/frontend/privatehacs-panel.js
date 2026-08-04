@@ -38,7 +38,7 @@ class PrivateHacsPanel extends HTMLElement {
           archived: "Archiviert",
           installFailed: "Installation fehlgeschlagen",
           repository: "Repository öffnen",
-          restart: "Neustart von Home Assistant erforderlich, um den Code der aktualisierten Integration zu laden.",
+          restart: "Home Assistant jetzt neu starten, damit die installierte Integration geladen wird.",
         }
       : {
           title: "PrivateHACS",
@@ -54,7 +54,7 @@ class PrivateHacsPanel extends HTMLElement {
           archived: "Archived",
           installFailed: "Installation failed",
           repository: "Open repository",
-          restart: "Restart Home Assistant to load the updated integration code.",
+          restart: "Restart Home Assistant now to load the installed integration.",
         };
   }
 

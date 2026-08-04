@@ -47,9 +47,7 @@ component that it did not previously manage.
 The sidebar displays an update state by comparing the installed commit SHA with
 the default branch on GitHub. Selecting **Update** downloads and atomically
 replaces the managed component directories. Home Assistant must be restarted
-after updating an already loaded integration so Python imports use the new code.
-Newly installed integrations are made discoverable in **Settings > Devices &
-services** immediately.
+after every installation or update so it loads the installed integration code.
 
 After updating **PrivateHACS** itself through HACS, restart Home Assistant. The
 sidebar then loads the panel code that belongs to the installed version.
