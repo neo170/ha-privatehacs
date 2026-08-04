@@ -197,7 +197,9 @@ class ArchiveInstaller:
                 raise InstallationError(f"Target path for {domain} is not a directory.")
             if destination.exists() and domain not in allowed_existing_domains:
                 raise InstallationError(
-                    f"Component {domain} is already managed outside PrivateHACS."
+                    f"Component {domain} is already installed outside PrivateHACS. "
+                    "Remove it in HACS or delete it manually before installing it "
+                    "with PrivateHACS."
                 )
 
         backups: dict[str, Path] = {}

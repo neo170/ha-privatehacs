@@ -33,8 +33,7 @@ class PrivateHacsPanel extends HTMLElement {
           update: "Aktualisieren",
           installed: "Installiert",
           externallyManaged: "Extern installiert",
-          externalUpdateAction: "Extern verwaltet",
-          externalManagedHint: "Diese Integration wird außerhalb von PrivateHACS verwaltet.",
+          removeExternalFirst: "Diese Integration ist bereits außerhalb von PrivateHACS installiert. Entferne sie zuerst in HACS (oder manuell), bevor du sie mit PrivateHACS installierst.",
           updateAvailable: "Update verfügbar",
           archived: "Archiviert",
           installFailed: "Installation fehlgeschlagen",
@@ -50,8 +49,7 @@ class PrivateHacsPanel extends HTMLElement {
           update: "Update",
           installed: "Installed",
           externallyManaged: "Installed externally",
-          externalUpdateAction: "Managed externally",
-          externalManagedHint: "This integration is managed outside PrivateHACS.",
+          removeExternalFirst: "This integration is already installed outside PrivateHACS. Remove it in HACS (or manually) before installing it with PrivateHACS.",
           updateAvailable: "Update available",
           archived: "Archived",
           installFailed: "Installation failed",
@@ -132,6 +130,13 @@ class PrivateHacsPanel extends HTMLElement {
         : repository.default_branch;
     details.append(metadata);
 
+    if (repository.managed_externally) {
+      const conflict = document.createElement("p");
+      conflict.className = "conflict";
+      conflict.textContent = labels.removeExternalFirst;
+      details.append(conflict);
+    }
+
     const actions = document.createElement("div");
     actions.className = "actions";
     const status = document.createElement("span");
@@ -148,19 +153,16 @@ class PrivateHacsPanel extends HTMLElement {
     }
     actions.append(status);
 
-    const install = document.createElement("button");
     const isWorking = this._workingRepository === repository.full_name;
-    install.textContent = repository.managed_externally
-      ? labels.externalUpdateAction
-      : repository.update_available
-        ? labels.update
-        : labels.install;
-    install.disabled = isWorking || repository.archived || repository.managed_externally;
-    if (repository.managed_externally) {
-      install.title = labels.externalManagedHint;
+    const canInstall = !repository.installed && !repository.managed_externally;
+    const canUpdate = repository.installed && repository.update_available;
+    if (!repository.archived && (canInstall || canUpdate)) {
+      const install = document.createElement("button");
+      install.textContent = canUpdate ? labels.update : labels.install;
+      install.disabled = isWorking;
+      install.addEventListener("click", () => this._install(repository));
+      actions.append(install);
     }
-    install.addEventListener("click", () => this._install(repository));
-    actions.append(install);
 
     const link = document.createElement("a");
     link.href = repository.html_url;
@@ -246,6 +248,11 @@ class PrivateHacsPanel extends HTMLElement {
           color: var(--secondary-text-color);
           font-family: var(--code-font-family, monospace);
           font-size: 13px;
+          margin: 8px 0 0;
+          overflow-wrap: anywhere;
+        }
+        .conflict {
+          color: var(--error-color);
           margin: 8px 0 0;
           overflow-wrap: anywhere;
         }

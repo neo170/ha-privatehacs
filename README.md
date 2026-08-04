@@ -58,6 +58,10 @@ reference. PrivateHACS does not mark externally managed integrations as
 updatable and does not overwrite integrations it did not install itself; update
 them in their original manager, such as HACS.
 
+To move an integration from HACS to PrivateHACS, first remove it in HACS. Both
+managers install the component into the same domain directory, so they cannot
+manage two copies of the same integration.
+
 ## Diagnostics
 
 When the sidebar says that no private repositories were found, select
@@ -97,3 +101,21 @@ py -3 -m pytest
 
 For end-to-end config-flow and WebSocket tests, install Home Assistant's test
 dependencies in a dedicated development environment.
+
+## Release
+
+Create the next patch release, including the commit, push, GitHub tag, and
+generated GitHub release notes, with one command:
+
+```powershell
+.\scripts\Release.ps1
+```
+
+The script updates the version in `manifest.json` and `pyproject.toml`, runs the
+test suite and panel syntax check, and then stages all non-ignored working-tree
+changes in its release commit. It only releases from an up-to-date local `main`
+branch and requires authenticated `git`, GitHub CLI (`gh`), Python, and Node.js.
+
+Use `-Bump Minor`, `-Bump Major`, or `-Version 1.2.3` to select another version.
+Use `-Prerelease` to create a GitHub prerelease. Run `-WhatIf` to validate the
+working tree without changing files, Git, or GitHub.

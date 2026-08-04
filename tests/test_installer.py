@@ -71,7 +71,7 @@ def test_install_does_not_overwrite_unmanaged_component(tmp_path: Path) -> None:
     external_component.mkdir(parents=True)
     (external_component / "__init__.py").write_text("EXTERNAL", encoding="utf-8")
 
-    with pytest.raises(InstallationError, match="already managed outside"):
+    with pytest.raises(InstallationError, match="Remove it in HACS"):
         ArchiveInstaller(custom_components).install_archive(
             _component_archive("example"), set()
         )
