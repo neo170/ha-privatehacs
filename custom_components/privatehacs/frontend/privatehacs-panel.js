@@ -121,7 +121,9 @@ class PrivateHacsPanel extends HTMLElement {
     metadata.className = "metadata";
     const versions = Object.entries(repository.local_versions || {}).map(([domain, local]) => {
       const remote = repository.available_versions?.[domain];
-      return remote ? `${domain}: ${local || "?"} -> ${remote}` : `${domain}: ${local || "?"}`;
+      return repository.update_available && remote
+        ? `${domain}: ${local || "?"} -> ${remote}`
+        : `${domain}: ${local || "?"}`;
     });
     metadata.textContent = versions.length
       ? versions.join(", ")
