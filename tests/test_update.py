@@ -135,6 +135,8 @@ def test_update_entity_exposes_and_installs_a_github_revision() -> None:
                 "full_name": record.full_name,
                 "available_commit": "fedcba9876543210",
                 "update_available": True,
+                "local_versions": {"example": "1.0.0"},
+                "available_versions": {"example": "1.1.0"},
                 "html_url": "https://github.test/owner/ha-example",
             }
         ]
@@ -144,13 +146,38 @@ def test_update_entity_exposes_and_installs_a_github_revision() -> None:
     entity.hass = object()
 
     assert entity.available is True
-    assert entity.installed_version == "0123456789ab"
-    assert entity.latest_version == "fedcba987654"
+    assert entity.installed_version == "1.0.0"
+    assert entity.latest_version == "1.1.0"
     assert entity.version_is_newer(entity.latest_version, entity.installed_version)
 
     asyncio.run(entity.async_install(None, False))
 
     assert manager.installed == record.full_name
-    assert entity.installed_version == "fedcba987654"
     assert coordinator.refreshes == 1
     assert "Restart Home Assistant" in notifications.notifications[-1][0][1]
+
+
+def test_update_entity_uses_revisions_when_manifest_versions_are_equal() -> None:
+    """A source-only update stays installable when its manifest version is unchanged."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="0123456789abcdef",
+        domains=("example",),
+        installed_at="2026-08-05T00:00:00+00:00",
+    )
+    coordinator = _Coordinator(
+        [
+            {
+                "full_name": record.full_name,
+                "available_commit": "fedcba9876543210",
+                "update_available": True,
+                "local_versions": {"example": "1.0.0"},
+                "available_versions": {"example": "1.0.0"},
+            }
+        ]
+    )
+    entity = PrivateHacsRepositoryUpdateEntity("entry", _Manager(), coordinator, record)
+
+    assert entity.installed_version == "1.0.0 (0123456789ab)"
+    assert entity.latest_version == "1.0.0 (fedcba987654)"

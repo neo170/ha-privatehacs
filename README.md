@@ -53,6 +53,9 @@ PrivateHACS-managed repositories also appear on Home Assistant's **Settings >
 System > Updates** page. Their update entities check GitHub every 15 minutes
 and can install the current default-branch revision. HACS- or manually managed
 integrations are intentionally not added there.
+When a repository publishes manifest versions, Home Assistant displays those
+versions. It falls back to a commit revision only when no manifest version is
+available or a source update did not change it.
 
 After updating **PrivateHACS** itself through HACS, restart Home Assistant. The
 sidebar then loads the panel code that belongs to the installed version.

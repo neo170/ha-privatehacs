@@ -74,18 +74,47 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str:
-        """Return the commit currently installed by PrivateHACS."""
-        return _short_revision(self._record.commit_sha)
+        """Return the local manifest version, with a commit fallback."""
+        repository = self._catalog_entry
+        local_version = _manifest_version_label(
+            repository.get("local_versions") if repository else None
+        )
+        if local_version is None:
+            return _short_revision(self._record.commit_sha)
+
+        available_version = _manifest_version_label(
+            repository.get("available_versions") if repository else None
+        )
+        if (
+            repository
+            and repository.get("update_available")
+            and local_version == available_version
+        ):
+            return _version_with_revision(local_version, self._record.commit_sha)
+        return local_version
 
     @property
     def latest_version(self) -> str | None:
-        """Return the available commit, or a manifest fallback when necessary."""
+        """Return the available manifest version, or a commit fallback."""
         repository = self._catalog_entry
         if repository is None:
             return None
 
         if not repository.get("update_available"):
             return self.installed_version
+
+        available_version = _manifest_version_label(
+            repository.get("available_versions")
+        )
+        local_version = _manifest_version_label(repository.get("local_versions"))
+        if available_version is not None:
+            if available_version != local_version:
+                return available_version
+
+            available_commit = repository.get("available_commit")
+            if isinstance(available_commit, str) and available_commit:
+                return _version_with_revision(available_version, available_commit)
+            return _manifest_version_marker(repository.get("available_versions"))
 
         available_commit = repository.get("available_commit")
         if isinstance(available_commit, str) and available_commit:
@@ -158,14 +187,33 @@ def _short_revision(commit: str) -> str:
     return commit[:12]
 
 
+def _version_with_revision(version: str, commit: str) -> str:
+    """Keep a same-version source update distinguishable to Home Assistant."""
+    return f"{version} ({_short_revision(commit)})"
+
+
+def _manifest_version_label(versions: object) -> str | None:
+    """Return a concise display version for one or more integration manifests."""
+    if not isinstance(versions, dict):
+        return None
+
+    versioned_domains = sorted(
+        (domain, version)
+        for domain, version in versions.items()
+        if isinstance(domain, str) and isinstance(version, str) and version
+    )
+    if not versioned_domains:
+        return None
+
+    versions_only = {version for _, version in versioned_domains}
+    if len(versions_only) == 1:
+        return versioned_domains[0][1]
+    return ", ".join(
+        f"{domain} {version}" for domain, version in versioned_domains
+    )
+
+
 def _manifest_version_marker(available_versions: object) -> str:
     """Return a distinct update marker when GitHub's commit endpoint failed."""
-    if not isinstance(available_versions, dict):
-        return "new manifest version"
-
-    versions = [
-        f"{domain}={version or '?'}"
-        for domain, version in sorted(available_versions.items())
-        if isinstance(domain, str) and (isinstance(version, str) or version is None)
-    ]
-    return "manifest " + ", ".join(versions) if versions else "new manifest version"
+    version = _manifest_version_label(available_versions)
+    return f"manifest {version}" if version else "new manifest version"
