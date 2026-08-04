@@ -12,7 +12,8 @@ components, and tracks installed commits for updates.
 3. In **Settings > Devices & services**, add the **PrivateHACS** integration.
 4. Enter the GitHub username and a personal access token (PAT).
 5. Open **PrivateHACS** in the Home Assistant sidebar to install or update a
-   private repository.
+  private repository. PrivateHACS displays only repositories whose name starts
+  with `ha-`.
 
 No `configuration.yaml` changes are required.
 
@@ -49,6 +50,13 @@ replaces the managed component directories. Home Assistant must be restarted
 after updating an already loaded integration so Python imports use the new code.
 Newly installed integrations are made discoverable in **Settings > Devices &
 services** immediately.
+
+PrivateHACS also reads local `custom_components` manifests. If a displayed
+repository contains an integration already installed by HACS or another method,
+the sidebar shows the installed and current GitHub manifest versions and marks
+an available newer version. PrivateHACS does not overwrite integrations it did
+not install itself; update externally managed integrations in their original
+manager, such as HACS.
 
 ## Diagnostics
 

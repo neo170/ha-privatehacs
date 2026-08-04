@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 
 from homeassistant.core import HomeAssistant
@@ -14,6 +15,7 @@ from .github import GitHubClient, GitHubError
 from .installer import ArchiveInstaller, InstallationError
 from .models import GitHubRepository, InstalledRepository
 from .storage import PrivateHacsStore
+from .versioning import is_newer_version
 
 
 @dataclass(slots=True)
@@ -38,19 +40,48 @@ class PrivateHacsManager:
 
     async def async_get_catalog(self) -> list[dict[str, object]]:
         """Return available private repositories and their installed update state."""
-        repositories = await self._client.async_list_private_repositories()
+        repositories = [
+            repository
+            for repository in await self._client.async_list_private_repositories()
+            if _is_privatehacs_repository(repository)
+        ]
         installed = {record.full_name: record for record in self._store.values()}
+        local_versions = await self._hass.async_add_executor_job(
+            _get_local_component_versions, self._installer.custom_components_path
+        )
+        semaphore = asyncio.Semaphore(4)
 
         async def build_item(repository: GitHubRepository) -> dict[str, object]:
             record = installed.get(repository.full_name)
             remote_commit: str | None = None
-            if record is not None:
+            remote_versions: dict[str, str | None] = {}
+            async with semaphore:
                 try:
-                    remote_commit = await self._client.async_get_commit_sha(
+                    remote_versions = await self._client.async_get_integration_versions(
                         repository.full_name, repository.default_branch
                     )
                 except GitHubError:
-                    remote_commit = None
+                    remote_versions = {}
+                if record is not None:
+                    try:
+                        remote_commit = await self._client.async_get_commit_sha(
+                            repository.full_name, repository.default_branch
+                        )
+                    except GitHubError:
+                        remote_commit = None
+
+            local_component_versions = {
+                domain: local_versions[domain]
+                for domain in remote_versions
+                if domain in local_versions
+            }
+            managed_by_privatehacs = record is not None
+            managed_externally = bool(local_component_versions) and not managed_by_privatehacs
+            version_update_available = any(
+                is_newer_version(remote_versions[domain], local_version)
+                for domain, local_version in local_component_versions.items()
+            )
+            domains = tuple(sorted(set(remote_versions) | set(record.domains if record else ())))
 
             return {
                 "full_name": repository.full_name,
@@ -59,15 +90,22 @@ class PrivateHacsManager:
                 "html_url": repository.html_url,
                 "updated_at": repository.updated_at,
                 "archived": repository.archived,
-                "installed": record is not None,
-                "domains": list(record.domains) if record else [],
+                "installed": managed_by_privatehacs or bool(local_component_versions),
+                "managed_by_privatehacs": managed_by_privatehacs,
+                "managed_externally": managed_externally,
+                "domains": list(domains),
+                "local_versions": local_component_versions,
+                "available_versions": remote_versions,
                 "installed_at": record.installed_at if record else None,
                 "installed_commit": record.commit_sha if record else None,
                 "available_commit": remote_commit,
                 "update_available": bool(
-                    record is not None
-                    and remote_commit is not None
-                    and record.commit_sha != remote_commit
+                    version_update_available
+                    or (
+                        managed_by_privatehacs
+                        and remote_commit is not None
+                        and record.commit_sha != remote_commit
+                    )
                 ),
             }
 
@@ -77,6 +115,8 @@ class PrivateHacsManager:
         """Install or update all custom components published by one private repository."""
         async with self._install_lock:
             repository = await self._client.async_get_repository(full_name)
+            if not _is_privatehacs_repository(repository):
+                raise InstallationError("Only repositories whose name starts with ha- are supported.")
             current = self._store.get(repository.full_name)
             commit_sha = await self._client.async_get_commit_sha(
                 repository.full_name, repository.default_branch
@@ -147,3 +187,27 @@ class PrivateHacsManager:
                 len(repository.domains) for repository in installed_repositories
             ),
         }
+
+
+def _is_privatehacs_repository(repository: GitHubRepository) -> bool:
+    """Return whether a repository follows the PrivateHACS catalog naming rule."""
+    return repository.full_name.rsplit("/", maxsplit=1)[-1].lower().startswith("ha-")
+
+
+def _get_local_component_versions(custom_components_path: Path) -> dict[str, str | None]:
+    """Read valid local custom component manifest versions from the config directory."""
+    if not custom_components_path.is_dir():
+        return {}
+
+    versions: dict[str, str | None] = {}
+    for manifest_path in custom_components_path.glob("*/manifest.json"):
+        domain = manifest_path.parent.name
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(manifest, dict) or manifest.get("domain") != domain:
+            continue
+        version = manifest.get("version")
+        versions[domain] = version if isinstance(version, str) else None
+    return versions

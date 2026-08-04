@@ -32,6 +32,10 @@ class PrivateHacsPanel extends HTMLElement {
           install: "Installieren",
           update: "Aktualisieren",
           installed: "Installiert",
+          externallyManaged: "Extern installiert",
+          externalUpdate: "Externes Update verfügbar",
+          externalUpdateAction: "Extern verwaltet",
+          externalManagedHint: "Diese Integration wird außerhalb von PrivateHACS verwaltet.",
           updateAvailable: "Update verfügbar",
           archived: "Archiviert",
           installFailed: "Installation fehlgeschlagen",
@@ -46,6 +50,10 @@ class PrivateHacsPanel extends HTMLElement {
           install: "Install",
           update: "Update",
           installed: "Installed",
+          externallyManaged: "Installed externally",
+          externalUpdate: "External update available",
+          externalUpdateAction: "Managed externally",
+          externalManagedHint: "This integration is managed outside PrivateHACS.",
           updateAvailable: "Update available",
           archived: "Archived",
           installFailed: "Installation failed",
@@ -115,9 +123,15 @@ class PrivateHacsPanel extends HTMLElement {
 
     const metadata = document.createElement("p");
     metadata.className = "metadata";
-    metadata.textContent = repository.domains.length
-      ? repository.domains.join(", ")
-      : repository.default_branch;
+    const versions = Object.entries(repository.local_versions || {}).map(([domain, local]) => {
+      const remote = repository.available_versions?.[domain];
+      return remote ? `${domain}: ${local || "?"} -> ${remote}` : `${domain}: ${local || "?"}`;
+    });
+    metadata.textContent = versions.length
+      ? versions.join(", ")
+      : repository.domains.length
+        ? repository.domains.join(", ")
+        : repository.default_branch;
     details.append(metadata);
 
     const actions = document.createElement("div");
@@ -126,6 +140,11 @@ class PrivateHacsPanel extends HTMLElement {
     status.className = "status";
     if (repository.archived) {
       status.textContent = labels.archived;
+    } else if (repository.managed_externally && repository.update_available) {
+      status.classList.add("update");
+      status.textContent = labels.externalUpdate;
+    } else if (repository.managed_externally) {
+      status.textContent = labels.externallyManaged;
     } else if (repository.update_available) {
       status.classList.add("update");
       status.textContent = labels.updateAvailable;
@@ -136,8 +155,15 @@ class PrivateHacsPanel extends HTMLElement {
 
     const install = document.createElement("button");
     const isWorking = this._workingRepository === repository.full_name;
-    install.textContent = repository.update_available ? labels.update : labels.install;
-    install.disabled = isWorking || repository.archived;
+    install.textContent = repository.managed_externally
+      ? labels.externalUpdateAction
+      : repository.update_available
+        ? labels.update
+        : labels.install;
+    install.disabled = isWorking || repository.archived || repository.managed_externally;
+    if (repository.managed_externally) {
+      install.title = labels.externalManagedHint;
+    }
     install.addEventListener("click", () => this._install(repository));
     actions.append(install);
 

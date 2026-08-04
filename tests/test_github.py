@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import types
@@ -73,6 +75,26 @@ class _Session:
         return _Response()
 
 
+class _ContentsResponse(_Response):
+    def __init__(self, payload: object) -> None:
+        self._payload = payload
+
+    async def json(self, content_type: object = None) -> object:
+        return self._payload
+
+
+class _ContentsSession:
+    def get(self, url: str, **_: object) -> _ContentsResponse:
+        if url.endswith("/contents/custom_components"):
+            return _ContentsResponse([{"type": "dir", "name": "example"}])
+        if url.endswith("/contents/custom_components/example/manifest.json"):
+            manifest = base64.b64encode(
+                json.dumps({"domain": "example", "version": "1.2.0"}).encode()
+            ).decode()
+            return _ContentsResponse({"encoding": "base64", "content": manifest})
+        raise AssertionError(f"Unexpected URL: {url}")
+
+
 def test_catalog_filters_private_repositories_and_redacts_diagnostics() -> None:
     """Catalog lookup does not rely on GitHub's visibility filter."""
     session = _Session()
@@ -95,3 +117,14 @@ def test_catalog_filters_private_repositories_and_redacts_diagnostics() -> None:
     }
     assert "owner/private" not in str(client.repository_query_diagnostics)
     assert "secret-token" not in str(client.repository_query_diagnostics)
+
+
+def test_get_integration_versions_reads_remote_manifests() -> None:
+    """Remote component manifest versions can be mapped to local domains."""
+    client = github.GitHubClient(_ContentsSession(), "owner", "secret-token")
+
+    versions = asyncio.run(
+        client.async_get_integration_versions("owner/ha-example", "main")
+    )
+
+    assert versions == {"example": "1.2.0"}

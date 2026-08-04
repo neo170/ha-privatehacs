@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import json
 import logging
 import re
 from typing import Any
@@ -180,6 +182,46 @@ class GitHubClient:
             raise GitHubError("GitHub returned an invalid commit response.")
         return sha
 
+    async def async_get_integration_versions(
+        self, full_name: str, ref: str
+    ) -> dict[str, str | None]:
+        """Return manifest versions under custom_components at a GitHub ref."""
+        try:
+            contents = await self._async_get_value(
+                f"/repos/{full_name}/contents/custom_components", {"ref": ref}
+            )
+        except GitHubNotFoundError:
+            return {}
+
+        if not isinstance(contents, list):
+            raise GitHubError("GitHub returned invalid custom component contents.")
+
+        versions: dict[str, str | None] = {}
+        for entry in contents:
+            if (
+                not isinstance(entry, dict)
+                or entry.get("type") != "dir"
+                or not isinstance(domain := entry.get("name"), str)
+                or not re.fullmatch(r"[a-z0-9_]+", domain)
+            ):
+                continue
+
+            try:
+                manifest = await self._async_get_json(
+                    f"/repos/{full_name}/contents/custom_components/{domain}/manifest.json",
+                    {"ref": ref},
+                )
+                manifest = self._decode_manifest(manifest)
+            except GitHubNotFoundError:
+                continue
+
+            if manifest.get("domain") != domain:
+                continue
+            version = manifest.get("version")
+            versions[domain] = version if isinstance(version, str) else None
+
+        return versions
+
     async def async_download_archive(self, full_name: str, ref: str) -> bytes:
         """Download a source archive without writing credentials to disk."""
         url = f"{GITHUB_API_URL}/repos/{full_name}/zipball/{ref}"
@@ -187,15 +229,38 @@ class GitHubClient:
             await self._async_raise_for_status(response)
             return await response.read()
 
-    async def _async_get_json(self, path: str) -> dict[str, Any]:
+    async def _async_get_json(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Request a JSON object from the GitHub API."""
-        async with self._session.get(
-            f"{GITHUB_API_URL}{path}", headers=self._headers
-        ) as response:
-            payload = await self._async_read_json(response)
+        payload = await self._async_get_value(path, params)
         if not isinstance(payload, dict):
             raise GitHubError("GitHub returned an unexpected response.")
         return payload
+
+    async def _async_get_value(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> Any:
+        """Request a JSON value from the GitHub API."""
+        async with self._session.get(
+            f"{GITHUB_API_URL}{path}", params=params, headers=self._headers
+        ) as response:
+            return await self._async_read_json(response)
+
+    @staticmethod
+    def _decode_manifest(payload: dict[str, Any]) -> dict[str, Any]:
+        """Decode a base64 manifest response from GitHub's contents endpoint."""
+        if payload.get("encoding") != "base64" or not isinstance(
+            content := payload.get("content"), str
+        ):
+            raise GitHubError("GitHub returned an invalid manifest response.")
+        try:
+            manifest = json.loads(base64.b64decode(content).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as err:
+            raise GitHubError("GitHub returned an invalid manifest file.") from err
+        if not isinstance(manifest, dict):
+            raise GitHubError("GitHub returned an invalid manifest file.")
+        return manifest
 
     async def _async_read_json(self, response: ClientResponse) -> Any:
         """Read a JSON response after converting HTTP errors."""

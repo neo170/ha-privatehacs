@@ -34,6 +34,11 @@ class ArchiveInstaller:
         """Initialize the installer for Home Assistant's custom components directory."""
         self._custom_components_path = custom_components_path
 
+    @property
+    def custom_components_path(self) -> Path:
+        """Return Home Assistant's custom components directory."""
+        return self._custom_components_path
+
     def inspect_archive(self, archive: bytes) -> ArchiveContents:
         """Validate the archive and list the integration domains it contains."""
         try:
