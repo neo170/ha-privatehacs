@@ -135,3 +135,15 @@ class PrivateHacsManager:
             for record in self._store.values()
             for domain in record.domains
         }
+
+    @property
+    def diagnostics(self) -> dict[str, object]:
+        """Return diagnostic state without private repository names or credentials."""
+        installed_repositories = self._store.values()
+        return {
+            "repository_query": self._client.repository_query_diagnostics,
+            "installed_repository_count": len(installed_repositories),
+            "managed_component_count": sum(
+                len(repository.domains) for repository in installed_repositories
+            ),
+        }

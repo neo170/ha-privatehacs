@@ -50,6 +50,35 @@ after updating an already loaded integration so Python imports use the new code.
 Newly installed integrations are made discoverable in **Settings > Devices &
 services** immediately.
 
+## Diagnostics
+
+When the sidebar says that no private repositories were found, select
+**Refresh** once, then open **Settings > Devices & services > PrivateHACS** and
+use the config entry menu to download diagnostics. The export contains only
+counts and API metadata, never the PAT or private repository names. In
+particular, check these fields:
+
+- `visible_repositories`: repositories GitHub returned to the PAT.
+- `private_repositories`: the subset PrivateHACS can offer for installation.
+- `oauth_scopes` and `rate_limit_remaining`: GitHub response metadata when it
+  is available.
+- `error`: the last API error, if the lookup failed.
+
+PrivateHACS writes a warning to Home Assistant's system log when GitHub returns
+zero private repositories. For more detail without editing `configuration.yaml`,
+run this action in **Developer tools > Actions**, refresh the sidebar, then open
+the system log:
+
+```yaml
+action: logger.set_level
+data:
+  custom_components.privatehacs: debug
+```
+
+For a fine-grained PAT, ensure that every intended private repository is selected
+and that it has **Contents: Read-only** permission. For organization repositories,
+authorize the token for the organization's SSO if required.
+
 ## Development
 
 The focused installer tests do not require a Home Assistant installation:

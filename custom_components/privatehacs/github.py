@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+import logging
 import re
 from typing import Any
 
@@ -9,6 +12,8 @@ from aiohttp import ClientResponse, ClientSession
 
 from .const import GITHUB_API_URL, GITHUB_API_VERSION
 from .models import GitHubAccount, GitHubRepository
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class GitHubError(Exception):
@@ -23,6 +28,32 @@ class GitHubNotFoundError(GitHubError):
     """The requested GitHub resource was not found or is inaccessible."""
 
 
+@dataclass(frozen=True, slots=True)
+class RepositoryQueryDiagnostics:
+    """Non-sensitive results from the latest private repository lookup."""
+
+    queried_at: str
+    pages: int
+    visible_repositories: int
+    private_repositories: int
+    oauth_scopes: str | None
+    rate_limit_remaining: str | None
+    error: str | None = None
+
+    def as_dict(self) -> dict[str, bool | int | str | None]:
+        """Return data suitable for logs and Home Assistant diagnostics."""
+        return {
+            "completed": self.error is None,
+            "queried_at": self.queried_at,
+            "pages": self.pages,
+            "visible_repositories": self.visible_repositories,
+            "private_repositories": self.private_repositories,
+            "oauth_scopes": self.oauth_scopes,
+            "rate_limit_remaining": self.rate_limit_remaining,
+            "error": self.error,
+        }
+
+
 class GitHubClient:
     """Minimal GitHub REST client using Home Assistant's shared session."""
 
@@ -35,6 +66,14 @@ class GitHubClient:
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": GITHUB_API_VERSION,
         }
+        self._last_repository_query: RepositoryQueryDiagnostics | None = None
+
+    @property
+    def repository_query_diagnostics(self) -> dict[str, bool | int | str | None]:
+        """Return only non-sensitive state from the latest repository lookup."""
+        if self._last_repository_query is None:
+            return {"completed": False, "error": "No repository query has run yet."}
+        return self._last_repository_query.as_dict()
 
     async def async_validate(self) -> GitHubAccount:
         """Validate the configured account and token."""
@@ -50,29 +89,77 @@ class GitHubClient:
         repositories: list[GitHubRepository] = []
         url = f"{GITHUB_API_URL}/user/repos"
         params: dict[str, str] | None = {
-            "visibility": "private",
             "affiliation": "owner,collaborator,organization_member",
             "per_page": "100",
             "sort": "updated",
             "direction": "desc",
         }
 
-        while url:
-            async with self._session.get(
-                url, params=params, headers=self._headers
-            ) as response:
-                payload = await self._async_read_json(response)
-                next_link = response.links.get("next", {}).get("url")
-            params = None
+        pages = 0
+        visible_repositories = 0
+        oauth_scopes: str | None = None
+        rate_limit_remaining: str | None = None
+        try:
+            while url:
+                async with self._session.get(
+                    url, params=params, headers=self._headers
+                ) as response:
+                    payload = await self._async_read_json(response)
+                    next_link = response.links.get("next", {}).get("url")
+                    oauth_scopes = response.headers.get("X-OAuth-Scopes")
+                    rate_limit_remaining = response.headers.get("X-RateLimit-Remaining")
+                params = None
 
-            if not isinstance(payload, list):
-                raise GitHubError("GitHub returned an invalid repository list.")
+                if not isinstance(payload, list):
+                    raise GitHubError("GitHub returned an invalid repository list.")
 
-            for item in payload:
-                if isinstance(item, dict) and item.get("private") is True:
-                    repositories.append(GitHubRepository.from_api(item))
+                pages += 1
+                visible_repositories += len(payload)
+                for item in payload:
+                    if isinstance(item, dict) and item.get("private") is True:
+                        repositories.append(GitHubRepository.from_api(item))
 
-            url = str(next_link) if next_link else ""
+                url = str(next_link) if next_link else ""
+        except GitHubError as err:
+            self._last_repository_query = RepositoryQueryDiagnostics(
+                queried_at=datetime.now(UTC).isoformat(),
+                pages=pages,
+                visible_repositories=visible_repositories,
+                private_repositories=len(repositories),
+                oauth_scopes=oauth_scopes,
+                rate_limit_remaining=rate_limit_remaining,
+                error=str(err),
+            )
+            _LOGGER.warning(
+                "GitHub repository lookup failed after %s page(s): %s", pages, err
+            )
+            raise
+
+        self._last_repository_query = RepositoryQueryDiagnostics(
+            queried_at=datetime.now(UTC).isoformat(),
+            pages=pages,
+            visible_repositories=visible_repositories,
+            private_repositories=len(repositories),
+            oauth_scopes=oauth_scopes,
+            rate_limit_remaining=rate_limit_remaining,
+        )
+        _LOGGER.debug(
+            "GitHub repository lookup completed: %s visible, %s private, %s page(s), "
+            "rate limit remaining %s, OAuth scopes %s.",
+            visible_repositories,
+            len(repositories),
+            pages,
+            rate_limit_remaining,
+            oauth_scopes,
+        )
+        if not repositories:
+            _LOGGER.warning(
+                "GitHub returned no private repositories. The configured PAT can see "
+                "%s repository/repositories across %s page(s). Verify the PAT has "
+                "access to the intended private repositories and organization SSO is authorized.",
+                visible_repositories,
+                pages,
+            )
 
         return repositories
 
