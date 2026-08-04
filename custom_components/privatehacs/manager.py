@@ -180,6 +180,11 @@ class PrivateHacsManager:
         }
 
     @property
+    def installed_repositories(self) -> tuple[InstalledRepository, ...]:
+        """Return the repositories that PrivateHACS is allowed to update."""
+        return self._store.values()
+
+    @property
     def diagnostics(self) -> dict[str, object]:
         """Return diagnostic state without private repository names or credentials."""
         installed_repositories = self._store.values()

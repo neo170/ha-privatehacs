@@ -6,7 +6,6 @@ NAME = "PrivateHACS"
 CONF_GITHUB_USERNAME = "github_username"
 CONF_GITHUB_TOKEN = "github_token"
 
-PLATFORMS: list[str] = []
 STORAGE_KEY = f"{DOMAIN}.repositories"
 STORAGE_VERSION = 1
 

@@ -49,6 +49,11 @@ the default branch on GitHub. Selecting **Update** downloads and atomically
 replaces the managed component directories. Home Assistant must be restarted
 after every installation or update so it loads the installed integration code.
 
+PrivateHACS-managed repositories also appear on Home Assistant's **Settings >
+System > Updates** page. Their update entities check GitHub every 15 minutes
+and can install the current default-branch revision. HACS- or manually managed
+integrations are intentionally not added there.
+
 After updating **PrivateHACS** itself through HACS, restart Home Assistant. The
 sidebar then loads the panel code that belongs to the installed version.
 
