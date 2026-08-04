@@ -33,7 +33,6 @@ class PrivateHacsPanel extends HTMLElement {
           update: "Aktualisieren",
           installed: "Installiert",
           externallyManaged: "Extern installiert",
-          externalUpdate: "Externes Update verfügbar",
           externalUpdateAction: "Extern verwaltet",
           externalManagedHint: "Diese Integration wird außerhalb von PrivateHACS verwaltet.",
           updateAvailable: "Update verfügbar",
@@ -51,7 +50,6 @@ class PrivateHacsPanel extends HTMLElement {
           update: "Update",
           installed: "Installed",
           externallyManaged: "Installed externally",
-          externalUpdate: "External update available",
           externalUpdateAction: "Managed externally",
           externalManagedHint: "This integration is managed outside PrivateHACS.",
           updateAvailable: "Update available",
@@ -140,9 +138,6 @@ class PrivateHacsPanel extends HTMLElement {
     status.className = "status";
     if (repository.archived) {
       status.textContent = labels.archived;
-    } else if (repository.managed_externally && repository.update_available) {
-      status.classList.add("update");
-      status.textContent = labels.externalUpdate;
     } else if (repository.managed_externally) {
       status.textContent = labels.externallyManaged;
     } else if (repository.update_available) {

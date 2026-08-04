@@ -100,11 +100,14 @@ class PrivateHacsManager:
                 "installed_commit": record.commit_sha if record else None,
                 "available_commit": remote_commit,
                 "update_available": bool(
-                    version_update_available
-                    or (
-                        managed_by_privatehacs
-                        and remote_commit is not None
-                        and record.commit_sha != remote_commit
+                    not managed_externally
+                    and (
+                        version_update_available
+                        or (
+                            managed_by_privatehacs
+                            and remote_commit is not None
+                            and record.commit_sha != remote_commit
+                        )
                     )
                 ),
             }

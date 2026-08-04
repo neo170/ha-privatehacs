@@ -53,10 +53,10 @@ services** immediately.
 
 PrivateHACS also reads local `custom_components` manifests. If a displayed
 repository contains an integration already installed by HACS or another method,
-the sidebar shows the installed and current GitHub manifest versions and marks
-an available newer version. PrivateHACS does not overwrite integrations it did
-not install itself; update externally managed integrations in their original
-manager, such as HACS.
+the sidebar shows the installed and current GitHub manifest versions for
+reference. PrivateHACS does not mark externally managed integrations as
+updatable and does not overwrite integrations it did not install itself; update
+them in their original manager, such as HACS.
 
 ## Diagnostics
 
