@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GitHub verbinden",
+        "description": "Verwende einen GitHub Personal Access Token mit Lesezugriff auf die privaten Repositories, die installiert werden sollen.",
+        "data": {
+          "github_username": "GitHub-Benutzername",
+          "github_token": "Personal Access Token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "GitHub konnte nicht erreicht werden.",
+      "invalid_auth": "GitHub hat diesen Personal Access Token abgelehnt."
+    },
+    "abort": {
+      "single_instance_allowed": "Für PrivateHACS kann nur ein GitHub-Konto konfiguriert werden."
+    }
+  }
+}

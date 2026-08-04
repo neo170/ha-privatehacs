@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect GitHub",
+        "description": "Use a GitHub personal access token that can read the private repositories you want to install.",
+        "data": {
+          "github_username": "GitHub username",
+          "github_token": "Personal access token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to GitHub.",
+      "invalid_auth": "GitHub rejected this personal access token."
+    },
+    "abort": {
+      "single_instance_allowed": "Only one GitHub account can be configured for PrivateHACS."
+    }
+  }
+}

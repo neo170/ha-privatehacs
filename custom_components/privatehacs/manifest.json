@@ -1,0 +1,9 @@
+{
+  "domain": "privatehacs",
+  "name": "PrivateHACS",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["frontend", "http"],
+  "iot_class": "cloud_polling",
+  "version": "0.0.1"
+}
