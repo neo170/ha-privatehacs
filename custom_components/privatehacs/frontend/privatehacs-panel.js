@@ -39,6 +39,9 @@ class PrivateHacsPanel extends HTMLElement {
           installFailed: "Installation fehlgeschlagen",
           repository: "Repository öffnen",
           restart: "Home Assistant jetzt neu starten, damit die installierte Integration geladen wird.",
+          lovelaceCard: "Lovelace-Karte",
+          lovelaceResourceRegistered: "Lovelace-Ressource registriert. Dashboard neu laden.",
+          lovelaceResourceManual: "Füge diese Lovelace-Ressource manuell hinzu:",
         }
       : {
           title: "PrivateHACS",
@@ -55,6 +58,9 @@ class PrivateHacsPanel extends HTMLElement {
           installFailed: "Installation failed",
           repository: "Open repository",
           restart: "Restart Home Assistant now to load the installed integration.",
+          lovelaceCard: "Lovelace card",
+          lovelaceResourceRegistered: "Lovelace resource registered. Reload the dashboard.",
+          lovelaceResourceManual: "Add this Lovelace resource manually:",
         };
   }
 
@@ -87,7 +93,13 @@ class PrivateHacsPanel extends HTMLElement {
         type: "privatehacs/install",
         repository: repository.full_name,
       });
-      this._message = `${repository.full_name}: ${result.domains.join(", ")}`;
+      if (result.lovelace_resource) {
+        this._message = `${repository.full_name}: ${result.lovelace_resource_registered
+          ? this._labels().lovelaceResourceRegistered
+          : `${this._labels().lovelaceResourceManual} ${result.lovelace_resource}`}`;
+      } else {
+        this._message = `${repository.full_name}: ${result.domains.join(", ")}`;
+      }
       if (result.restart_required) {
         this._message = `${this._message}. ${this._labels().restart}`;
       }
@@ -136,11 +148,13 @@ class PrivateHacsPanel extends HTMLElement {
         ? `${domain}: ${local || "?"} -> ${remote}`
         : `${domain}: ${local || "?"}`;
     });
-    metadata.textContent = versions.length
-      ? versions.join(", ")
-      : repository.domains.length
-        ? repository.domains.join(", ")
-        : repository.default_branch;
+    metadata.textContent = repository.lovelace_filename
+      ? `${labels.lovelaceCard}: ${repository.lovelace_filename}`
+      : versions.length
+        ? versions.join(", ")
+        : repository.domains.length
+          ? repository.domains.join(", ")
+          : repository.default_branch;
     details.append(metadata);
 
     if (repository.managed_externally) {

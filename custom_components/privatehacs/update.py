@@ -157,10 +157,7 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
 
         persistent_notification.async_create(
             self.hass,
-            (
-                f"PrivateHACS installed {self._record.full_name}. "
-                "Restart Home Assistant to load the integration code."
-            ),
+            _update_completion_message(self._record.full_name, result),
             title="PrivateHACS restart required",
             notification_id=(
                 f"{DOMAIN}_restart_{self._entry_id}_"
@@ -217,3 +214,16 @@ def _manifest_version_marker(available_versions: object) -> str:
     """Return a distinct update marker when GitHub's commit endpoint failed."""
     version = _manifest_version_label(available_versions)
     return f"manifest {version}" if version else "new manifest version"
+
+
+def _update_completion_message(full_name: str, result: dict[str, object]) -> str:
+    """Return the appropriate post-update instruction for installed content."""
+    if result.get("lovelace_resource"):
+        return (
+            f"PrivateHACS updated the Lovelace card {full_name}. "
+            "Reload the dashboard to load the new card code."
+        )
+    return (
+        f"PrivateHACS installed {full_name}. "
+        "Restart Home Assistant to load the integration code."
+    )

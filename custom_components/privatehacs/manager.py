@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -41,7 +42,9 @@ class PrivateHacsManager:
         self._hass = hass
         self._client = client
         self._store = store
-        self._installer = ArchiveInstaller(Path(hass.config.path("custom_components")))
+        self._installer = ArchiveInstaller(
+            Path(hass.config.path("custom_components")), Path(hass.config.path("www"))
+        )
         self._icon_cache_path = Path(
             hass.config.path(".storage", f"{DOMAIN}_icons")
         )
@@ -111,6 +114,7 @@ class PrivateHacsManager:
                 "managed_by_privatehacs": managed_by_privatehacs,
                 "managed_externally": managed_externally,
                 "domains": list(domains),
+                "lovelace_filename": record.lovelace_filename if record else None,
                 "icon_url": (
                     f"{PANEL_ICON_URL_PATH}/{icon_domain}.png"
                     if icon_domain is not None
@@ -152,6 +156,52 @@ class PrivateHacsManager:
             contents = await self._hass.async_add_executor_job(
                 self._installer.inspect_archive, archive
             )
+
+            if contents.lovelace_filename is not None:
+                if current and current.lovelace_filename is None:
+                    raise InstallationError(
+                        "Repository changed from a custom integration to a Lovelace card."
+                    )
+                directory_name = (
+                    current.lovelace_directory
+                    if current and current.lovelace_directory
+                    else _lovelace_directory_name(repository.full_name)
+                )
+                await self._hass.async_add_executor_job(
+                    self._installer.install_lovelace_card,
+                    archive,
+                    directory_name,
+                    current is not None,
+                )
+                record = InstalledRepository(
+                    full_name=repository.full_name,
+                    default_branch=repository.default_branch,
+                    commit_sha=commit_sha,
+                    domains=(),
+                    installed_at=datetime.now(UTC).isoformat(),
+                    lovelace_filename=contents.lovelace_filename,
+                    lovelace_directory=directory_name,
+                )
+                await self._store.async_upsert(record)
+                resource_url = _lovelace_resource_url(
+                    directory_name, contents.lovelace_filename, commit_sha
+                )
+                resource_registered = await _async_upsert_lovelace_resource(
+                    self._hass, directory_name, resource_url
+                )
+                return {
+                    "full_name": record.full_name,
+                    "domains": [],
+                    "commit": record.commit_sha,
+                    "lovelace_resource": resource_url,
+                    "lovelace_resource_registered": resource_registered,
+                    "restart_required": False,
+                }
+
+            if current and current.lovelace_filename is not None:
+                raise InstallationError(
+                    "Repository changed from a Lovelace card to a custom integration."
+                )
 
             installed_domains = self._domain_owners()
             conflicting_domains = {
@@ -222,6 +272,46 @@ class PrivateHacsManager:
 def _is_privatehacs_repository(repository: GitHubRepository) -> bool:
     """Return whether a repository follows the PrivateHACS catalog naming rule."""
     return repository.full_name.rsplit("/", maxsplit=1)[-1].lower().startswith("ha-")
+
+
+def _lovelace_directory_name(full_name: str) -> str:
+    """Return a stable, collision-resistant directory for one card repository."""
+    repository_name = full_name.rsplit("/", maxsplit=1)[-1].lower()
+    safe_name = re.sub(r"[^a-z0-9-]+", "-", repository_name).strip("-")
+    digest = hashlib.sha256(full_name.encode("utf-8")).hexdigest()[:12]
+    return f"{safe_name}-{digest}"
+
+
+def _lovelace_resource_url(directory_name: str, filename: str, commit_sha: str) -> str:
+    """Return the cache-busted local URL for an installed Lovelace card."""
+    return f"/local/privatehacs/{directory_name}/{filename}?v={commit_sha[:12]}"
+
+
+async def _async_upsert_lovelace_resource(
+    hass: HomeAssistant, directory_name: str, resource_url: str
+) -> bool:
+    """Create or update a storage-mode Lovelace module resource when available."""
+    lovelace_data = hass.data.get("lovelace")
+    resources = (
+        lovelace_data.get("resources")
+        if isinstance(lovelace_data, dict)
+        else getattr(lovelace_data, "resources", None)
+    )
+    if resources is None or getattr(resources, "store", None) is None:
+        return False
+
+    if not resources.loaded:
+        await resources.async_load()
+
+    namespace = f"/local/privatehacs/{directory_name}/"
+    for resource in resources.async_items():
+        if resource.get("url", "").startswith(namespace):
+            if resource["url"] != resource_url:
+                await resources.async_update_item(resource["id"], {"url": resource_url})
+            return True
+
+    await resources.async_create_item({"res_type": "module", "url": resource_url})
+    return True
 
 
 def _get_local_component_versions(custom_components_path: Path) -> dict[str, str | None]:

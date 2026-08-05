@@ -28,7 +28,9 @@ def _load_manager_module():
     installer = types.ModuleType(f"{package_name}.installer")
 
     class ArchiveInstaller:
-        def __init__(self, custom_components_path: Path) -> None:
+        def __init__(
+            self, custom_components_path: Path, www_path: Path | None = None
+        ) -> None:
             self.custom_components_path = custom_components_path
 
     installer.ArchiveInstaller = ArchiveInstaller
@@ -129,10 +131,43 @@ class _Installer:
         self.allowed_existing: set[str] | None = None
 
     def inspect_archive(self, _):
-        return types.SimpleNamespace(domains=("example",))
+        return types.SimpleNamespace(domains=("example",), lovelace_filename=None)
 
     def install_archive(self, _, allowed_existing: set[str]) -> None:
         self.allowed_existing = allowed_existing
+
+
+class _LovelaceInstaller(_Installer):
+    def inspect_archive(self, _):
+        return types.SimpleNamespace(domains=(), lovelace_filename="ha-example.js")
+
+    def install_lovelace_card(
+        self, _, directory_name: str, allow_existing: bool
+    ) -> None:
+        self.directory_name = directory_name
+        self.allow_existing = allow_existing
+
+
+class _Resources:
+    store = object()
+    loaded = False
+
+    def __init__(self) -> None:
+        self.items: list[dict[str, str]] = []
+
+    async def async_load(self) -> None:
+        self.loaded = True
+
+    def async_items(self) -> list[dict[str, str]]:
+        return self.items
+
+    async def async_create_item(self, item: dict[str, str]) -> None:
+        self.items.append({"id": "resource", **item})
+
+    async def async_update_item(self, item_id: str, item: dict[str, str]) -> None:
+        for resource in self.items:
+            if resource["id"] == item_id:
+                resource.update(item)
 
 
 def test_externally_managed_integration_is_not_advertised_as_updatable(
@@ -161,6 +196,7 @@ def test_externally_managed_integration_is_not_advertised_as_updatable(
             "managed_by_privatehacs": False,
             "managed_externally": True,
             "domains": ["example"],
+            "lovelace_filename": None,
             "icon_url": None,
             "local_versions": {"example": "1.0.0"},
             "available_versions": {"example": "1.1.0"},
@@ -211,3 +247,34 @@ def test_catalog_serves_an_installed_component_brand_icon(tmp_path: Path) -> Non
     assert (
         tmp_path / ".storage" / "privatehacs_icons" / "example.png"
     ).read_bytes() == b"icon"
+
+
+def test_lovelace_card_is_installed_and_registered_as_a_module(tmp_path: Path) -> None:
+    """A frontend card is stored below www and added to Lovelace resources."""
+    async def async_get_custom_components(_):
+        return {}
+
+    manager_module.loader.DATA_CUSTOM_COMPONENTS = "custom_components"
+    manager_module.loader.async_get_custom_components = async_get_custom_components
+    hass = _Hass(tmp_path)
+    resources = _Resources()
+    hass.data["lovelace"] = {"resources": resources}
+    store = _InstallStore()
+    manager = PrivateHacsManager(hass, _InstallClient(), store)
+    installer = _LovelaceInstaller(tmp_path / "custom_components")
+    manager._installer = installer
+
+    result = asyncio.run(manager.async_install_repository("owner/ha-example"))
+
+    assert result["restart_required"] is False
+    assert result["lovelace_resource_registered"] is True
+    assert result["lovelace_resource"].startswith(
+        "/local/privatehacs/ha-example-"
+    )
+    assert result["lovelace_resource"].endswith("/ha-example.js?v=commit-sha")
+    assert resources.items == [
+        {"id": "resource", "res_type": "module", "url": result["lovelace_resource"]}
+    ]
+    assert store.record is not None
+    assert store.record.lovelace_filename == "ha-example.js"
+    assert installer.allow_existing is False

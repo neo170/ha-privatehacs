@@ -42,6 +42,14 @@ PrivateHACS installs every domain contained in the repository. It refuses ZIP
 path traversal, symbolic links, malformed manifests, and overwriting a custom
 component that it did not previously manage.
 
+PrivateHACS also supports Lovelace card repositories that declare a JavaScript
+`filename` in their root `hacs.json`, such as a card built at
+`dist/ha-gauge.js`. It installs that file under `config/www/privatehacs` and,
+when Home Assistant uses storage-mode dashboards, registers its module resource
+automatically. For YAML-mode dashboards, PrivateHACS displays the `/local/...`
+resource URL to add manually. A Lovelace card installation or update only
+requires reloading the dashboard, not restarting Home Assistant.
+
 ## Updates
 
 The sidebar displays an update state by comparing the installed commit SHA with

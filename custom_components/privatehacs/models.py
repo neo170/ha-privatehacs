@@ -59,6 +59,8 @@ class InstalledRepository:
     commit_sha: str
     domains: tuple[str, ...]
     installed_at: str
+    lovelace_filename: str | None = None
+    lovelace_directory: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Serialize the record for Home Assistant storage."""
@@ -68,6 +70,8 @@ class InstalledRepository:
             "commit_sha": self.commit_sha,
             "domains": list(self.domains),
             "installed_at": self.installed_at,
+            "lovelace_filename": self.lovelace_filename,
+            "lovelace_directory": self.lovelace_directory,
         }
 
     @classmethod
@@ -78,6 +82,8 @@ class InstalledRepository:
         commit_sha = payload.get("commit_sha")
         installed_at = payload.get("installed_at")
         domains = payload.get("domains")
+        lovelace_filename = payload.get("lovelace_filename")
+        lovelace_directory = payload.get("lovelace_directory")
         if not all(isinstance(value, str) and value for value in (
             full_name,
             default_branch,
@@ -87,6 +93,16 @@ class InstalledRepository:
             isinstance(domain, str) and domain for domain in domains
         ):
             raise ValueError("Invalid installed repository record.")
+        if (
+            lovelace_filename is not None
+            and (not isinstance(lovelace_filename, str) or not lovelace_filename)
+        ) or (
+            lovelace_directory is not None
+            and (not isinstance(lovelace_directory, str) or not lovelace_directory)
+        ) or bool(lovelace_filename) != bool(lovelace_directory) or (
+            not domains and lovelace_filename is None
+        ):
+            raise ValueError("Invalid installed repository record.")
 
         return cls(
             full_name=full_name,
@@ -94,4 +110,6 @@ class InstalledRepository:
             commit_sha=commit_sha,
             domains=tuple(domains),
             installed_at=installed_at,
+            lovelace_filename=lovelace_filename,
+            lovelace_directory=lovelace_directory,
         )

@@ -51,6 +51,17 @@ def _component_archive(domain: str, body: str = "NEW") -> bytes:
     )
 
 
+def _lovelace_archive(filename: str = "ha-example.js") -> bytes:
+    return _archive(
+        {
+            "repo-sha/hacs.json": (
+                '{"filename": "' + filename + '", "content_in_root": false}'
+            ),
+            f"repo-sha/dist/{filename}": "window.customElements.define('ha-example', class {});",
+        }
+    )
+
+
 def test_install_replaces_a_managed_component_atomically(tmp_path: Path) -> None:
     custom_components = tmp_path / "custom_components"
     old_component = custom_components / "example"
@@ -100,3 +111,33 @@ def test_install_rejects_mismatched_manifest_domain(tmp_path: Path) -> None:
 
     with pytest.raises(InstallationError, match="different domain"):
         ArchiveInstaller(tmp_path / "custom_components").install_archive(archive, set())
+
+
+def test_install_lovelace_card_to_privatehacs_www_path(tmp_path: Path) -> None:
+    """A HACS-declared frontend card is atomically installed below www."""
+    installer = ArchiveInstaller(tmp_path / "custom_components", tmp_path / "www")
+
+    contents = installer.install_lovelace_card(
+        _lovelace_archive(), "ha-example-123456789abc", allow_existing=False
+    )
+
+    assert contents.domains == ()
+    assert contents.lovelace_filename == "ha-example.js"
+    assert (
+        tmp_path / "www" / "privatehacs" / "ha-example-123456789abc" / "ha-example.js"
+    ).read_text(encoding="utf-8") == "window.customElements.define('ha-example', class {});"
+
+
+def test_lovelace_card_does_not_overwrite_unmanaged_directory(tmp_path: Path) -> None:
+    """A non-PrivateHACS card directory is not replaced during first install."""
+    target = tmp_path / "www" / "privatehacs" / "ha-example-123456789abc"
+    target.mkdir(parents=True)
+    (target / "ha-example.js").write_text("EXTERNAL", encoding="utf-8")
+    installer = ArchiveInstaller(tmp_path / "custom_components", tmp_path / "www")
+
+    with pytest.raises(InstallationError, match="already installed outside"):
+        installer.install_lovelace_card(
+            _lovelace_archive(), "ha-example-123456789abc", allow_existing=False
+        )
+
+    assert (target / "ha-example.js").read_text(encoding="utf-8") == "EXTERNAL"
