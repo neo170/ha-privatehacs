@@ -381,11 +381,7 @@ class PrivateHacsPanel extends HTMLElement {
       install.addEventListener("click", () => this._install(repository, canTakeOver));
       actions.append(install);
     }
-    if (
-      this._restartRequired
-      && !repository.lovelace_filename
-      && repository.managed_by_privatehacs
-    ) {
+    if (!repository.lovelace_filename && repository.managed_by_privatehacs) {
       const reload = document.createElement("button");
       reload.textContent = labels.reloadIntegration;
       reload.disabled = isWorking;

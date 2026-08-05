@@ -57,13 +57,12 @@ the default branch on GitHub. Selecting **Update** downloads and atomically
 replaces the managed component directories. Home Assistant must be restarted
 after every installation or update so it loads the installed integration code.
 
-Before restarting, the sidebar offers **Reload integration** for every
-PrivateHACS-managed custom integration while a restart is pending. This
-best-effort action reloads its configured config entries, so an update can be
-tested immediately. It cannot load a newly installed integration that has no
-config entry yet and does not guarantee that every integration unloads cleanly.
-The restart option remains available if the reload fails or the integration
-does not work as expected.
+The sidebar offers **Reload integration** for every PrivateHACS-managed custom
+integration. This best-effort action reloads its configured config entries, so
+an update can be tested immediately. It cannot load a newly installed
+integration that has no config entry yet and does not guarantee that every
+integration unloads cleanly. The restart option remains available if the reload
+fails or the integration does not work as expected.
 
 PrivateHACS-managed repositories also appear on Home Assistant's **Settings >
 System > Updates** page. Their update entities check GitHub every 15 minutes
