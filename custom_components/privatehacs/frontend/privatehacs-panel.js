@@ -104,6 +104,19 @@ class PrivateHacsPanel extends HTMLElement {
     const row = document.createElement("article");
     row.className = "repository";
 
+    const icon = document.createElement("img");
+    icon.className = "integration-icon";
+    const domain = repository.domains?.[0];
+    if (domain) {
+      icon.alt = domain;
+      icon.src = `/api/brands/integration/${encodeURIComponent(domain)}/icon.png`;
+      icon.addEventListener("error", () => {
+        icon.removeAttribute("src");
+      });
+    } else {
+      icon.alt = "";
+    }
+
     const details = document.createElement("div");
     details.className = "details";
     const name = document.createElement("h2");
@@ -173,7 +186,7 @@ class PrivateHacsPanel extends HTMLElement {
     link.textContent = labels.repository;
     actions.append(link);
 
-    row.append(details, actions);
+    row.append(icon, details, actions);
     return row;
   }
 
@@ -238,8 +251,20 @@ class PrivateHacsPanel extends HTMLElement {
           border-radius: 6px;
           display: grid;
           gap: 20px;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: 48px minmax(0, 1fr) auto;
           padding: 16px;
+        }
+        .integration-icon {
+          background: var(--secondary-background-color);
+          border-radius: 4px;
+          box-sizing: border-box;
+          height: 48px;
+          object-fit: contain;
+          padding: 4px;
+          width: 48px;
+        }
+        .integration-icon:not([src]) {
+          border: 1px solid var(--divider-color);
         }
         .description {
           color: var(--secondary-text-color);
@@ -294,7 +319,10 @@ class PrivateHacsPanel extends HTMLElement {
           }
           .repository {
             align-items: stretch;
-            grid-template-columns: minmax(0, 1fr);
+            grid-template-columns: 48px minmax(0, 1fr);
+          }
+          .actions {
+            grid-column: 1 / -1;
           }
           .actions {
             align-items: center;
