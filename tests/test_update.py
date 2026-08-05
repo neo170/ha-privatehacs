@@ -154,7 +154,7 @@ def test_update_entity_exposes_and_installs_a_github_revision() -> None:
 
     assert manager.installed == record.full_name
     assert coordinator.refreshes == 1
-    assert "Restart Home Assistant" in notifications.notifications[-1][0][1]
+    assert "Optionally reload configured entries" in notifications.notifications[-1][0][1]
 
 
 def test_update_entity_uses_revisions_when_manifest_versions_are_equal() -> None:

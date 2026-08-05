@@ -265,6 +265,46 @@ class PrivateHacsManager:
                 "restart_required": True,
             }
 
+    async def async_reload_repository(self, full_name: str) -> dict[str, object]:
+        """Try to reload configured entries for one managed integration."""
+        async with self._install_lock:
+            record = self._store.get(full_name)
+            if record is None or record.lovelace_filename is not None:
+                raise InstallationError(
+                    "Only PrivateHACS-managed custom integrations can be reloaded."
+                )
+
+            entries = [
+                entry
+                for domain in record.domains
+                for entry in self._hass.config_entries.async_entries(domain=domain)
+            ]
+            reloaded_entries: list[str] = []
+            failed_entries: list[dict[str, str]] = []
+            for entry in entries:
+                try:
+                    reloaded = await self._hass.config_entries.async_reload(entry.entry_id)
+                except Exception as err:
+                    failed_entries.append({"entry_id": entry.entry_id, "error": str(err)})
+                    continue
+
+                if reloaded:
+                    reloaded_entries.append(entry.entry_id)
+                else:
+                    failed_entries.append(
+                        {
+                            "entry_id": entry.entry_id,
+                            "error": "Home Assistant did not reload the entry.",
+                        }
+                    )
+
+            return {
+                "full_name": record.full_name,
+                "reloaded_entries": reloaded_entries,
+                "failed_entries": failed_entries,
+                "restart_required": self._restart_required,
+            }
+
     async def async_uninstall_repository(self, full_name: str) -> dict[str, object]:
         """Remove a custom integration or Lovelace card managed by PrivateHACS."""
         async with self._install_lock:

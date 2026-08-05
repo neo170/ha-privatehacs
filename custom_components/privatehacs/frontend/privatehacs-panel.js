@@ -52,7 +52,14 @@ class PrivateHacsPanel extends HTMLElement {
           archived: "Archiviert",
           installFailed: "Installation fehlgeschlagen",
           repository: "Repository öffnen",
-          restart: "Home Assistant jetzt neu starten, damit die installierte Integration geladen wird.",
+          restart: "Home Assistant neu starten, um die installierte Integration zuverlässig zu laden.",
+          reloadIntegration: "Integration neu laden",
+          reloadConfirmation: "Eingerichtete Einträge für diese Integration neu laden? Ein Neustart von Home Assistant bleibt weiterhin möglich.",
+          reloading: "Integrationen werden neu geladen ...",
+          reloadComplete: "Integrationseinträge wurden neu geladen. Prüfe die Funktion und starte Home Assistant bei Bedarf neu.",
+          reloadNoEntries: "Keine eingerichteten Integrationseinträge zum Neuladen gefunden.",
+          reloadPartial: "Einige Integrationseinträge konnten nicht neu geladen werden:",
+          reloadFailed: "Neuladen fehlgeschlagen",
           lovelaceCard: "Lovelace-Karte",
           lovelaceResourceRegistered: "Lovelace-Ressource registriert. Dashboard neu laden.",
           lovelaceResourceManual: "Füge diese Lovelace-Ressource manuell hinzu:",
@@ -83,7 +90,14 @@ class PrivateHacsPanel extends HTMLElement {
           archived: "Archived",
           installFailed: "Installation failed",
           repository: "Open repository",
-          restart: "Restart Home Assistant now to load the installed integration.",
+          restart: "Restart Home Assistant to reliably load the installed integration.",
+          reloadIntegration: "Reload integration",
+          reloadConfirmation: "Reload configured entries for this integration? Restarting Home Assistant remains available.",
+          reloading: "Reloading integrations ...",
+          reloadComplete: "Integration entries were reloaded. Test the integration and restart Home Assistant if needed.",
+          reloadNoEntries: "No configured integration entries were found to reload.",
+          reloadPartial: "Some integration entries could not be reloaded:",
+          reloadFailed: "Reload failed",
           lovelaceCard: "Lovelace card",
           lovelaceResourceRegistered: "Lovelace resource registered. Reload the dashboard.",
           lovelaceResourceManual: "Add this Lovelace resource manually:",
@@ -173,6 +187,48 @@ class PrivateHacsPanel extends HTMLElement {
       await this._loadRepositories();
     } catch (error) {
       this._error = `${labels.uninstall}: ${error?.message || String(error)}`;
+    } finally {
+      this._workingRepository = null;
+      this._render();
+    }
+  }
+
+  async _reload(repository) {
+    const labels = this._labels();
+    if (!window.confirm(labels.reloadConfirmation)) {
+      return;
+    }
+
+    this._workingRepository = repository.full_name;
+    this._error = "";
+    this._message = labels.reloading;
+    this._render();
+    try {
+      const result = await this._hass.callWS({
+        type: "privatehacs/reload",
+        repository: repository.full_name,
+      });
+      const reloadedEntries = Array.isArray(result.reloaded_entries)
+        ? result.reloaded_entries
+        : [];
+      const failedEntries = Array.isArray(result.failed_entries)
+        ? result.failed_entries
+        : [];
+      if (failedEntries.length) {
+        const errors = failedEntries
+          .map((entry) => entry?.error)
+          .filter((error) => typeof error === "string" && error)
+          .join(" ");
+        this._message = `${repository.full_name}: ${labels.reloadPartial} ${errors}`;
+      } else if (reloadedEntries.length) {
+        this._message = `${repository.full_name}: ${labels.reloadComplete}`;
+      } else {
+        this._message = `${repository.full_name}: ${labels.reloadNoEntries}`;
+      }
+      this._restartRequired = Boolean(result.restart_required);
+      await this._loadRepositories();
+    } catch (error) {
+      this._error = `${labels.reloadFailed}: ${error?.message || String(error)}`;
     } finally {
       this._workingRepository = null;
       this._render();
@@ -324,6 +380,17 @@ class PrivateHacsPanel extends HTMLElement {
       install.disabled = isWorking;
       install.addEventListener("click", () => this._install(repository, canTakeOver));
       actions.append(install);
+    }
+    if (
+      this._restartRequired
+      && !repository.lovelace_filename
+      && repository.managed_by_privatehacs
+    ) {
+      const reload = document.createElement("button");
+      reload.textContent = labels.reloadIntegration;
+      reload.disabled = isWorking;
+      reload.addEventListener("click", () => this._reload(repository));
+      actions.append(reload);
     }
     if (!repository.archived && repository.managed_by_privatehacs) {
       const uninstall = document.createElement("button");

@@ -68,9 +68,27 @@ class _Hass:
             path=lambda *parts: str(config_path.joinpath(*parts))
         )
         self.data = {}
+        self.config_entries = _ConfigEntries()
 
     async def async_add_executor_job(self, func, *args):
         return func(*args)
+
+
+class _ConfigEntries:
+    def __init__(self) -> None:
+        self.entries: list[object] = []
+        self.reload_results: dict[str, bool | Exception] = {}
+        self.reloaded_entry_ids: list[str] = []
+
+    def async_entries(self, *, domain: str) -> list[object]:
+        return [entry for entry in self.entries if entry.domain == domain]
+
+    async def async_reload(self, entry_id: str) -> bool:
+        self.reloaded_entry_ids.append(entry_id)
+        result = self.reload_results[entry_id]
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 class _Client:
@@ -277,6 +295,42 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert installer.allowed_existing == set()
     assert store.record is not None
     assert store.record.commit_sha == "commit-sha"
+
+
+def test_reload_reloads_matching_entries_and_keeps_restart_available(
+    tmp_path: Path,
+) -> None:
+    """Only configured entries for the repository's domains are reloaded."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=("example",),
+        installed_at="2026-01-01T00:00:00+00:00",
+    )
+    store = _ManagedStore(record)
+    hass = _Hass(tmp_path)
+    hass.config_entries.entries = [
+        types.SimpleNamespace(entry_id="matching", domain="example"),
+        types.SimpleNamespace(entry_id="other", domain="other"),
+        types.SimpleNamespace(entry_id="failing", domain="example"),
+    ]
+    hass.config_entries.reload_results = {
+        "matching": True,
+        "failing": RuntimeError("reload failed"),
+    }
+    manager = PrivateHacsManager(hass, _InstallClient(), store)
+    manager._restart_required = True
+
+    result = asyncio.run(manager.async_reload_repository(record.full_name))
+
+    assert hass.config_entries.reloaded_entry_ids == ["matching", "failing"]
+    assert result == {
+        "full_name": record.full_name,
+        "reloaded_entries": ["matching"],
+        "failed_entries": [{"entry_id": "failing", "error": "reload failed"}],
+        "restart_required": True,
+    }
 
 
 def test_takeover_allows_replacing_an_external_component(tmp_path: Path) -> None:

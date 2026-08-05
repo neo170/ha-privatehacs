@@ -15,6 +15,7 @@ from .const import (
     DOMAIN,
     WS_INSTALL_REPOSITORY,
     WS_LIST_REPOSITORIES,
+    WS_RELOAD_REPOSITORY,
     WS_UNINSTALL_REPOSITORY,
 )
 from .github import GitHubError
@@ -29,6 +30,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         return
     websocket_api.async_register_command(hass, websocket_list_repositories)
     websocket_api.async_register_command(hass, websocket_install_repository)
+    websocket_api.async_register_command(hass, websocket_reload_repository)
     websocket_api.async_register_command(hass, websocket_uninstall_repository)
     domain_data[DATA_WEBSOCKET_REGISTERED] = True
 
@@ -102,6 +104,29 @@ async def websocket_install_repository(
         )
     except (GitHubError, InstallationError) as err:
         connection.send_error(msg["id"], "install_failed", str(err))
+        return
+
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_RELOAD_REPOSITORY, vol.Required("repository"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def websocket_reload_repository(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Try to reload configured entries for one managed custom integration."""
+    manager = _manager(hass)
+    if manager is None:
+        _not_configured(connection, msg["id"])
+        return
+
+    try:
+        result = await manager.async_reload_repository(msg["repository"])
+    except InstallationError as err:
+        connection.send_error(msg["id"], "reload_failed", str(err))
         return
 
     connection.send_result(msg["id"], result)

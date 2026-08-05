@@ -134,7 +134,10 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
         """Provide a concise description for the Home Assistant update dialog."""
         if self.latest_version == self.installed_version:
             return None
-        return "Update from the configured GitHub default branch. Restart Home Assistant after installation."
+        return (
+            "Update from the configured GitHub default branch. Optionally reload "
+            "configured entries in PrivateHACS, or restart Home Assistant."
+        )
 
     def version_is_newer(
         self, latest_version: str, installed_version: str
@@ -158,7 +161,7 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
         persistent_notification.async_create(
             self.hass,
             _update_completion_message(self._record.full_name, result),
-            title="PrivateHACS restart required",
+            title="PrivateHACS installation complete",
             notification_id=(
                 f"{DOMAIN}_restart_{self._entry_id}_"
                 f"{self._record.full_name.replace('/', '_')}"
@@ -225,5 +228,5 @@ def _update_completion_message(full_name: str, result: dict[str, object]) -> str
         )
     return (
         f"PrivateHACS installed {full_name}. "
-        "Restart Home Assistant to load the integration code."
+        "Optionally reload configured entries in PrivateHACS, or restart Home Assistant."
     )
