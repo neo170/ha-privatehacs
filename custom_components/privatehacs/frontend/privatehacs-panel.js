@@ -381,20 +381,24 @@ class PrivateHacsPanel extends HTMLElement {
       install.addEventListener("click", () => this._install(repository, canTakeOver));
       actions.append(install);
     }
-    if (!repository.lovelace_filename && repository.managed_by_privatehacs) {
-      const reload = document.createElement("button");
-      reload.textContent = labels.reloadIntegration;
-      reload.disabled = isWorking;
-      reload.addEventListener("click", () => this._reload(repository));
-      actions.append(reload);
-    }
     if (!repository.archived && repository.managed_by_privatehacs) {
+      const managedActions = document.createElement("div");
+      managedActions.className = "managed-actions";
       const uninstall = document.createElement("button");
       uninstall.className = "uninstall-button";
       uninstall.textContent = labels.uninstall;
       uninstall.disabled = isWorking;
       uninstall.addEventListener("click", () => this._uninstall(repository));
-      actions.append(uninstall);
+      managedActions.append(uninstall);
+      if (!repository.lovelace_filename) {
+        const reload = document.createElement("ha-icon-button");
+        reload.label = labels.reloadIntegration;
+        reload.disabled = isWorking;
+        reload.innerHTML = '<ha-icon icon="mdi:reload"></ha-icon>';
+        reload.addEventListener("click", () => this._reload(repository));
+        managedActions.append(reload);
+      }
+      actions.append(managedActions);
     }
 
     const link = document.createElement("a");
@@ -519,6 +523,14 @@ class PrivateHacsPanel extends HTMLElement {
         }
         .uninstall-button:hover:not(:disabled) {
           background: color-mix(in srgb, var(--error-color) 12%, transparent);
+        }
+        .managed-actions {
+          align-items: center;
+          display: flex;
+          gap: 4px;
+        }
+        .managed-actions ha-icon-button {
+          color: var(--secondary-text-color);
         }
         .catalog {
           display: grid;
