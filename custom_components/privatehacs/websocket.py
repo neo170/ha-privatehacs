@@ -46,7 +46,12 @@ def _not_configured(connection: websocket_api.ActiveConnection, message_id: int)
     connection.send_error(message_id, "not_configured", "PrivateHACS is not configured.")
 
 
-@websocket_api.websocket_command({vol.Required("type"): WS_LIST_REPOSITORIES})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_LIST_REPOSITORIES,
+        vol.Optional("refresh", default=False): bool,
+    }
+)
 @websocket_api.require_admin
 @websocket_api.async_response
 async def websocket_list_repositories(
@@ -59,7 +64,7 @@ async def websocket_list_repositories(
         return
 
     try:
-        repositories = await manager.async_get_catalog()
+        repositories = await manager.async_get_catalog(force_refresh=msg["refresh"])
     except GitHubError as err:
         connection.send_error(msg["id"], "github_error", str(err))
         return

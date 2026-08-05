@@ -91,7 +91,7 @@ class PrivateHacsPanel extends HTMLElement {
         };
   }
 
-  async _loadRepositories() {
+  async _loadRepositories(forceRefresh = false) {
     if (!this._hass) {
       return;
     }
@@ -100,7 +100,10 @@ class PrivateHacsPanel extends HTMLElement {
     this._error = "";
     this._render();
     try {
-      const result = await this._hass.callWS({ type: "privatehacs/repositories" });
+      const result = await this._hass.callWS({
+        type: "privatehacs/repositories",
+        refresh: forceRefresh,
+      });
       this._repositories = Array.isArray(result.repositories) ? result.repositories : [];
       this._restartRequired = Boolean(result.restart_required);
     } catch (error) {
@@ -597,7 +600,7 @@ class PrivateHacsPanel extends HTMLElement {
     const refresh = this.shadowRoot.querySelector("#refresh");
     refresh.disabled = this._loading || this._restarting;
     refresh.addEventListener("click", () => {
-      this._loadRepositories();
+      this._loadRepositories(true);
     });
     const search = this.shadowRoot.querySelector("#search");
     search.value = this._search;

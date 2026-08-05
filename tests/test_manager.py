@@ -74,7 +74,11 @@ class _Hass:
 
 
 class _Client:
+    def __init__(self) -> None:
+        self.repository_list_requests = 0
+
     async def async_list_private_repositories(self):
+        self.repository_list_requests += 1
         return [
             GitHubRepository(
                 full_name="owner/ha-example",
@@ -96,6 +100,24 @@ class _Store:
 
     def get(self, _):
         return None
+
+
+def test_catalog_uses_the_last_loaded_state_until_refreshed(tmp_path: Path) -> None:
+    """Repeated catalog reads avoid downloading the repository list again."""
+    client = _Client()
+    manager = PrivateHacsManager(_Hass(tmp_path), client, _Store())
+
+    async def _get_catalogs():
+        first_catalog = await manager.async_get_catalog()
+        second_catalog = await manager.async_get_catalog()
+        refreshed_catalog = await manager.async_get_catalog(force_refresh=True)
+        return first_catalog, second_catalog, refreshed_catalog
+
+    first_catalog, second_catalog, refreshed_catalog = asyncio.run(_get_catalogs())
+
+    assert second_catalog == first_catalog
+    assert refreshed_catalog == first_catalog
+    assert client.repository_list_requests == 2
 
 
 class _InstallClient:

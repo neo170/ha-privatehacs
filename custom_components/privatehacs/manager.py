@@ -48,9 +48,25 @@ class PrivateHacsManager:
         self._icon_cache_path = Path(hass.config.path("www", f"{DOMAIN}_icons"))
         self._install_lock = asyncio.Lock()
         self._restart_required = False
+        self._catalog: list[dict[str, object]] | None = None
+        self._catalog_lock = asyncio.Lock()
 
-    async def async_get_catalog(self) -> list[dict[str, object]]:
-        """Return available private repositories and their installed update state."""
+    async def async_get_catalog(
+        self, *, force_refresh: bool = False
+    ) -> list[dict[str, object]]:
+        """Return the cached catalog, refreshing it when explicitly requested."""
+        if not force_refresh and self._catalog is not None:
+            return self._catalog
+
+        async with self._catalog_lock:
+            if not force_refresh and self._catalog is not None:
+                return self._catalog
+
+            self._catalog = await self._async_build_catalog()
+            return self._catalog
+
+    async def _async_build_catalog(self) -> list[dict[str, object]]:
+        """Fetch and build the current private repository catalog."""
         repositories = [
             repository
             for repository in await self._client.async_list_private_repositories()
@@ -190,6 +206,7 @@ class PrivateHacsManager:
                 resource_registered = await _async_upsert_lovelace_resource(
                     self._hass, directory_name, resource_url
                 )
+                self._catalog = None
                 return {
                     "full_name": record.full_name,
                     "domains": [],
@@ -239,6 +256,7 @@ class PrivateHacsManager:
             self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
             await loader.async_get_custom_components(self._hass)
             self._restart_required = True
+            self._catalog = None
 
             return {
                 "full_name": record.full_name,
@@ -275,6 +293,7 @@ class PrivateHacsManager:
                 restart_required = True
 
             await self._store.async_remove(full_name)
+            self._catalog = None
             return {
                 "full_name": full_name,
                 "lovelace_resource_removed": resource_removed,

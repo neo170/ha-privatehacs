@@ -34,7 +34,7 @@ async def async_setup_entry(
         hass,
         _LOGGER,
         name=f"{DOMAIN}_{entry.entry_id}_updates",
-        update_method=manager.async_get_catalog,
+        update_method=lambda: manager.async_get_catalog(force_refresh=True),
         update_interval=SCAN_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
