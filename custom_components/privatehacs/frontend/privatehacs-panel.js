@@ -7,6 +7,8 @@ class PrivateHacsPanel extends HTMLElement {
     this._workingRepository = null;
     this._message = "";
     this._error = "";
+    this._search = "";
+    this._restarting = false;
   }
 
   set hass(value) {
@@ -26,9 +28,15 @@ class PrivateHacsPanel extends HTMLElement {
     return german
       ? {
           title: "PrivateHACS",
-          refresh: "Aktualisieren",
+          refresh: "Repository-Liste aktualisieren",
+          restartHomeAssistant: "Home Assistant neu starten",
+          restartConfirmation: "Home Assistant wirklich neu starten?",
+          restarting: "Home Assistant wird neu gestartet ...",
+          search: "Repositories suchen",
+          clearSearch: "Suche löschen",
           loading: "Private Repositories werden geladen ...",
           empty: "Keine privaten Repositories gefunden.",
+          noSearchResults: "Keine passenden Repositories gefunden.",
           install: "Installieren",
           update: "Aktualisieren",
           installed: "Installiert",
@@ -45,9 +53,15 @@ class PrivateHacsPanel extends HTMLElement {
         }
       : {
           title: "PrivateHACS",
-          refresh: "Refresh",
+          refresh: "Refresh repository list",
+          restartHomeAssistant: "Restart Home Assistant",
+          restartConfirmation: "Restart Home Assistant now?",
+          restarting: "Home Assistant is restarting ...",
+          search: "Search repositories",
+          clearSearch: "Clear search",
           loading: "Loading private repositories ...",
           empty: "No private repositories found.",
+          noSearchResults: "No matching repositories found.",
           install: "Install",
           update: "Update",
           installed: "Installed",
@@ -110,6 +124,40 @@ class PrivateHacsPanel extends HTMLElement {
       this._workingRepository = null;
       this._render();
     }
+  }
+
+  async _restartHomeAssistant() {
+    const labels = this._labels();
+    if (!window.confirm(labels.restartConfirmation)) {
+      return;
+    }
+
+    this._restarting = true;
+    this._message = labels.restarting;
+    this._error = "";
+    this._render();
+    try {
+      await this._hass.callService("homeassistant", "restart", {});
+    } catch (error) {
+      this._restarting = false;
+      this._error = error?.message || String(error);
+      this._render();
+    }
+  }
+
+  _filteredRepositories() {
+    const query = this._search.trim().toLowerCase();
+    if (!query) {
+      return this._repositories;
+    }
+
+    return this._repositories.filter((repository) => [
+      repository.full_name,
+      repository.description,
+      repository.default_branch,
+      repository.lovelace_filename,
+      ...(repository.domains || []),
+    ].some((value) => typeof value === "string" && value.toLowerCase().includes(query)));
   }
 
   _renderRepository(repository, labels) {
@@ -212,23 +260,75 @@ class PrivateHacsPanel extends HTMLElement {
           min-height: 100%;
         }
         main {
-          box-sizing: border-box;
-          margin: 0 auto;
-          max-width: 1080px;
-          padding: 28px 24px 48px;
+          min-height: 100%;
         }
         header {
           align-items: center;
-          border-bottom: 1px solid var(--divider-color);
+          background: var(--app-header-background-color, var(--primary-color));
+          color: var(--app-header-text-color, #fff);
           display: flex;
           justify-content: space-between;
-          min-height: 58px;
+          min-height: 64px;
+          padding: 0 16px;
         }
-        h1 {
-          font-size: 28px;
+        .topbar-title {
+          align-items: center;
+          display: flex;
+          font-size: 20px;
           font-weight: 500;
-          letter-spacing: 0;
-          margin: 0;
+          gap: 12px;
+          min-width: 0;
+        }
+        .topbar-title ha-icon {
+          --mdi-icon-size: 24px;
+          flex: 0 0 auto;
+        }
+        .topbar-title span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .header-actions {
+          align-items: center;
+          display: flex;
+        }
+        .search-toolbar {
+          border-bottom: 1px solid var(--divider-color);
+          padding: 14px max(16px, calc((100% - 1080px) / 2));
+        }
+        .search-wrap {
+          align-items: center;
+          background: var(--secondary-background-color);
+          border: 1px solid var(--divider-color);
+          border-radius: 4px;
+          display: flex;
+          gap: 8px;
+          max-width: 640px;
+          min-height: 42px;
+          padding-left: 12px;
+        }
+        .search-wrap ha-icon {
+          --mdi-icon-size: 20px;
+          color: var(--secondary-text-color);
+        }
+        .search-wrap input {
+          background: transparent;
+          border: 0;
+          color: var(--primary-text-color);
+          flex: 1;
+          font: inherit;
+          min-width: 0;
+          outline: 0;
+        }
+        .search-wrap ha-icon-button {
+          --ha-icon-button-size: 40px;
+          color: var(--secondary-text-color);
+        }
+        .content {
+          box-sizing: border-box;
+          margin: 0 auto;
+          max-width: 1080px;
+          padding: 0 24px 48px;
         }
         h2 {
           font-size: 17px;
@@ -326,8 +426,15 @@ class PrivateHacsPanel extends HTMLElement {
           border-color: var(--error-color);
         }
         @media (max-width: 600px) {
-          main {
-            padding: 18px 14px 36px;
+          header {
+            min-height: 56px;
+            padding: 0 8px 0 14px;
+          }
+          .search-toolbar {
+            padding: 12px 14px;
+          }
+          .content {
+            padding: 0 14px 36px;
           }
           .repository {
             align-items: stretch;
@@ -335,8 +442,6 @@ class PrivateHacsPanel extends HTMLElement {
           }
           .actions {
             grid-column: 1 / -1;
-          }
-          .actions {
             align-items: center;
             grid-template-columns: 1fr auto;
             justify-items: start;
@@ -348,15 +453,56 @@ class PrivateHacsPanel extends HTMLElement {
       </style>
       <main>
         <header>
-          <h1>${labels.title}</h1>
-          <button id="refresh">${labels.refresh}</button>
+          <div class="topbar-title">
+            <ha-icon icon="mdi:github"></ha-icon>
+            <span>${labels.title}</span>
+          </div>
+          <div class="header-actions">
+            <ha-icon-button id="restart" label="${labels.restartHomeAssistant}">
+              <ha-icon icon="mdi:restart"></ha-icon>
+            </ha-icon-button>
+            <ha-icon-button id="refresh" label="${labels.refresh}">
+              <ha-icon icon="mdi:reload"></ha-icon>
+            </ha-icon-button>
+          </div>
         </header>
-        <div id="feedback"></div>
-        <section class="catalog" id="catalog"></section>
+        <div class="search-toolbar">
+          <div class="search-wrap">
+            <ha-icon icon="mdi:magnify"></ha-icon>
+            <input id="search" type="search" autocomplete="off" aria-label="${labels.search}">
+            <ha-icon-button id="clear-search" label="${labels.clearSearch}">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </ha-icon-button>
+          </div>
+        </div>
+        <div class="content">
+          <div id="feedback"></div>
+          <section class="catalog" id="catalog"></section>
+        </div>
       </main>`;
 
-    this.shadowRoot.querySelector("#refresh").addEventListener("click", () => {
+    const refresh = this.shadowRoot.querySelector("#refresh");
+    refresh.disabled = this._loading || this._restarting;
+    refresh.addEventListener("click", () => {
       this._loadRepositories();
+    });
+    const restart = this.shadowRoot.querySelector("#restart");
+    restart.disabled = this._restarting;
+    restart.addEventListener("click", () => this._restartHomeAssistant());
+
+    const search = this.shadowRoot.querySelector("#search");
+    search.value = this._search;
+    search.placeholder = labels.search;
+    const clearSearch = this.shadowRoot.querySelector("#clear-search");
+    clearSearch.hidden = !this._search;
+    search.addEventListener("input", (event) => {
+      this._search = event.target.value;
+      this._render();
+    });
+    clearSearch.addEventListener("click", () => {
+      this._search = "";
+      this._render();
+      this.shadowRoot.querySelector("#search").focus();
     });
 
     const feedback = this.shadowRoot.querySelector("#feedback");
@@ -380,14 +526,15 @@ class PrivateHacsPanel extends HTMLElement {
       catalog.append(loading);
       return;
     }
-    if (!this._repositories.length) {
+    const repositories = this._filteredRepositories();
+    if (!repositories.length) {
       const empty = document.createElement("p");
       empty.className = "empty";
-      empty.textContent = labels.empty;
+      empty.textContent = this._repositories.length ? labels.noSearchResults : labels.empty;
       catalog.append(empty);
       return;
     }
-    this._repositories.forEach((repository) => {
+    repositories.forEach((repository) => {
       catalog.append(this._renderRepository(repository, labels));
     });
   }
