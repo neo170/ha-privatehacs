@@ -300,9 +300,9 @@ class PrivateHacsPanel extends HTMLElement {
           box-sizing: border-box;
           color: var(--primary-text-color);
           display: flex;
-          height: 64px;
+          height: 56px;
           justify-content: space-between;
-          min-height: 64px;
+          min-height: 56px;
           padding: 0 24px;
         }
         .topbar-title {
@@ -339,9 +339,9 @@ class PrivateHacsPanel extends HTMLElement {
           border-radius: 4px;
           display: flex;
           gap: 8px;
-          max-width: 640px;
           min-height: 42px;
           padding-left: 12px;
+          width: 100%;
         }
         .search-wrap ha-icon {
           --mdi-icon-size: 20px;
@@ -484,8 +484,8 @@ class PrivateHacsPanel extends HTMLElement {
         }
         @media (max-width: 600px) {
           header {
-            height: 64px;
-            min-height: 64px;
+            height: 56px;
+            min-height: 56px;
             padding: 0 8px 0 16px;
           }
           .search-toolbar {
