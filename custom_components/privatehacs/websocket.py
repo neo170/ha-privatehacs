@@ -56,7 +56,13 @@ async def websocket_list_repositories(
         connection.send_error(msg["id"], "github_error", str(err))
         return
 
-    connection.send_result(msg["id"], {"repositories": repositories})
+    connection.send_result(
+        msg["id"],
+        {
+            "repositories": repositories,
+            "restart_required": manager.restart_required,
+        },
+    )
 
 
 @websocket_api.websocket_command(

@@ -9,6 +9,7 @@ class PrivateHacsPanel extends HTMLElement {
     this._error = "";
     this._search = "";
     this._restarting = false;
+    this._restartRequired = false;
   }
 
   set hass(value) {
@@ -89,6 +90,7 @@ class PrivateHacsPanel extends HTMLElement {
     try {
       const result = await this._hass.callWS({ type: "privatehacs/repositories" });
       this._repositories = Array.isArray(result.repositories) ? result.repositories : [];
+      this._restartRequired = Boolean(result.restart_required);
     } catch (error) {
       this._error = error?.message || String(error);
     } finally {
@@ -115,7 +117,7 @@ class PrivateHacsPanel extends HTMLElement {
         this._message = `${repository.full_name}: ${result.domains.join(", ")}`;
       }
       if (result.restart_required) {
-        this._message = `${this._message}. ${this._labels().restart}`;
+        this._restartRequired = true;
       }
       await this._loadRepositories();
     } catch (error) {
@@ -298,9 +300,9 @@ class PrivateHacsPanel extends HTMLElement {
           box-sizing: border-box;
           color: var(--primary-text-color);
           display: flex;
-          height: 80px;
+          height: 64px;
           justify-content: space-between;
-          min-height: 80px;
+          min-height: 64px;
           padding: 0 24px;
         }
         .topbar-title {
@@ -325,7 +327,10 @@ class PrivateHacsPanel extends HTMLElement {
           display: flex;
         }
         .search-toolbar {
-          padding: 14px max(16px, calc((100% - 1080px) / 2));
+          box-sizing: border-box;
+          margin: 0 auto;
+          max-width: 1080px;
+          padding: 14px 24px;
         }
         .search-wrap {
           align-items: center;
@@ -453,6 +458,27 @@ class PrivateHacsPanel extends HTMLElement {
           margin: 18px 0 0;
           padding: 10px 12px;
         }
+        .restart-required {
+          align-items: center;
+          border-left: 3px solid var(--warning-color, #f39c12);
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin: 18px 0 0;
+          padding: 10px 12px;
+        }
+        .restart-required span {
+          flex: 1 1 220px;
+        }
+        .restart-button {
+          background: transparent;
+          color: var(--primary-color);
+          font-weight: 500;
+          padding: 0 4px;
+        }
+        .restart-button:hover:not(:disabled) {
+          background: var(--secondary-background-color);
+        }
         .error {
           border-color: var(--error-color);
         }
@@ -490,9 +516,6 @@ class PrivateHacsPanel extends HTMLElement {
             <span>${labels.title}</span>
           </div>
           <div class="header-actions">
-            <ha-icon-button id="restart" label="${labels.restartHomeAssistant}">
-              <ha-icon icon="mdi:restart"></ha-icon>
-            </ha-icon-button>
             <ha-icon-button id="refresh" label="${labels.refresh}">
               <ha-icon icon="mdi:reload"></ha-icon>
             </ha-icon-button>
@@ -518,10 +541,6 @@ class PrivateHacsPanel extends HTMLElement {
     refresh.addEventListener("click", () => {
       this._loadRepositories();
     });
-    const restart = this.shadowRoot.querySelector("#restart");
-    restart.disabled = this._restarting;
-    restart.addEventListener("click", () => this._restartHomeAssistant());
-
     const search = this.shadowRoot.querySelector("#search");
     search.value = this._search;
     search.placeholder = labels.search;
@@ -551,6 +570,19 @@ class PrivateHacsPanel extends HTMLElement {
       notice.className = "notice";
       notice.textContent = this._message;
       feedback.append(notice);
+    }
+    if (this._restartRequired) {
+      const restart = document.createElement("div");
+      restart.className = "restart-required";
+      const message = document.createElement("span");
+      message.textContent = labels.restart;
+      const action = document.createElement("button");
+      action.className = "restart-button";
+      action.textContent = labels.restartHomeAssistant;
+      action.disabled = this._restarting;
+      action.addEventListener("click", () => this._restartHomeAssistant());
+      restart.append(message, action);
+      feedback.append(restart);
     }
 
     this._renderCatalog();

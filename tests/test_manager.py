@@ -223,6 +223,7 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     result = asyncio.run(manager.async_install_repository("owner/ha-example"))
 
     assert result["restart_required"] is True
+    assert manager.restart_required is True
     assert installer.allowed_existing == set()
     assert store.record is not None
     assert store.record.commit_sha == "commit-sha"

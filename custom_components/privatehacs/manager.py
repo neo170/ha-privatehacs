@@ -49,6 +49,7 @@ class PrivateHacsManager:
             hass.config.path(".storage", f"{DOMAIN}_icons")
         )
         self._install_lock = asyncio.Lock()
+        self._restart_required = False
 
     async def async_get_catalog(self) -> list[dict[str, object]]:
         """Return available private repositories and their installed update state."""
@@ -235,6 +236,7 @@ class PrivateHacsManager:
             await self._store.async_upsert(record)
             self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
             await loader.async_get_custom_components(self._hass)
+            self._restart_required = True
 
             return {
                 "full_name": record.full_name,
@@ -255,6 +257,11 @@ class PrivateHacsManager:
     def installed_repositories(self) -> tuple[InstalledRepository, ...]:
         """Return the repositories that PrivateHACS is allowed to update."""
         return self._store.values()
+
+    @property
+    def restart_required(self) -> bool:
+        """Return whether this runtime installed integration code awaiting a restart."""
+        return self._restart_required
 
     @property
     def diagnostics(self) -> dict[str, object]:
