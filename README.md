@@ -61,8 +61,9 @@ The sidebar offers **Reload integration** for every PrivateHACS-managed custom
 integration. This best-effort action reloads its configured config entries, so
 an update can be tested immediately. It cannot load a newly installed
 integration that has no config entry yet and does not guarantee that every
-integration unloads cleanly. The restart option remains available if the reload
-fails or the integration does not work as expected.
+integration unloads cleanly. When every configured entry reloads successfully,
+PrivateHACS clears the pending restart for that integration. A failed or
+partial reload keeps the restart requirement in place.
 
 PrivateHACS-managed repositories also appear on Home Assistant's **Settings >
 System > Updates** page. Their update entities check GitHub every 15 minutes

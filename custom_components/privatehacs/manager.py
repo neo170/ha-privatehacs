@@ -47,7 +47,7 @@ class PrivateHacsManager:
         )
         self._icon_cache_path = Path(hass.config.path("www", f"{DOMAIN}_icons"))
         self._install_lock = asyncio.Lock()
-        self._restart_required = False
+        self._restart_required_repositories: set[str] = set()
         self._catalog: list[dict[str, object]] | None = None
         self._catalog_lock = asyncio.Lock()
 
@@ -255,7 +255,7 @@ class PrivateHacsManager:
             await self._store.async_upsert(record)
             self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
             await loader.async_get_custom_components(self._hass)
-            self._restart_required = True
+            self._restart_required_repositories.add(record.full_name)
             self._catalog = None
 
             return {
@@ -298,11 +298,14 @@ class PrivateHacsManager:
                         }
                     )
 
+            if entries and not failed_entries:
+                self._restart_required_repositories.discard(record.full_name)
+
             return {
                 "full_name": record.full_name,
                 "reloaded_entries": reloaded_entries,
                 "failed_entries": failed_entries,
-                "restart_required": self._restart_required,
+                "restart_required": self.restart_required,
             }
 
     async def async_uninstall_repository(self, full_name: str) -> dict[str, object]:
@@ -328,7 +331,7 @@ class PrivateHacsManager:
                 )
                 self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
                 await loader.async_get_custom_components(self._hass)
-                self._restart_required = True
+                self._restart_required_repositories.add(record.full_name)
                 resource_removed = False
                 restart_required = True
 
@@ -356,7 +359,7 @@ class PrivateHacsManager:
     @property
     def restart_required(self) -> bool:
         """Return whether this runtime installed integration code awaiting a restart."""
-        return self._restart_required
+        return bool(self._restart_required_repositories)
 
     @property
     def diagnostics(self) -> dict[str, object]:

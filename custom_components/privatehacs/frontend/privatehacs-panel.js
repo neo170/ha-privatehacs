@@ -54,9 +54,9 @@ class PrivateHacsPanel extends HTMLElement {
           repository: "Repository öffnen",
           restart: "Home Assistant neu starten, um die installierte Integration zuverlässig zu laden.",
           reloadIntegration: "Integration neu laden",
-          reloadConfirmation: "Eingerichtete Einträge für diese Integration neu laden? Ein Neustart von Home Assistant bleibt weiterhin möglich.",
+          reloadConfirmation: "Eingerichtete Einträge für diese Integration neu laden? Bei Erfolg ist für diese Integration kein Neustart mehr ausstehend.",
           reloading: "Integrationen werden neu geladen ...",
-          reloadComplete: "Integrationseinträge wurden neu geladen. Prüfe die Funktion und starte Home Assistant bei Bedarf neu.",
+          reloadComplete: "Integrationseinträge wurden neu geladen.",
           reloadNoEntries: "Keine eingerichteten Integrationseinträge zum Neuladen gefunden.",
           reloadPartial: "Einige Integrationseinträge konnten nicht neu geladen werden:",
           reloadFailed: "Neuladen fehlgeschlagen",
@@ -92,9 +92,9 @@ class PrivateHacsPanel extends HTMLElement {
           repository: "Open repository",
           restart: "Restart Home Assistant to reliably load the installed integration.",
           reloadIntegration: "Reload integration",
-          reloadConfirmation: "Reload configured entries for this integration? Restarting Home Assistant remains available.",
+          reloadConfirmation: "Reload configured entries for this integration? On success, this integration will no longer require a restart.",
           reloading: "Reloading integrations ...",
-          reloadComplete: "Integration entries were reloaded. Test the integration and restart Home Assistant if needed.",
+          reloadComplete: "Integration entries were reloaded.",
           reloadNoEntries: "No configured integration entries were found to reload.",
           reloadPartial: "Some integration entries could not be reloaded:",
           reloadFailed: "Reload failed",
@@ -392,6 +392,7 @@ class PrivateHacsPanel extends HTMLElement {
       managedActions.append(uninstall);
       if (!repository.lovelace_filename) {
         const reload = document.createElement("ha-icon-button");
+        reload.className = "reload-button";
         reload.label = labels.reloadIntegration;
         reload.disabled = isWorking;
         reload.innerHTML = '<ha-icon icon="mdi:reload"></ha-icon>';
@@ -529,8 +530,15 @@ class PrivateHacsPanel extends HTMLElement {
           display: flex;
           gap: 4px;
         }
-        .managed-actions ha-icon-button {
-          color: var(--secondary-text-color);
+        .reload-button {
+          --ha-icon-button-size: 36px;
+          background: var(--primary-color);
+          border-radius: 4px;
+          color: var(--text-primary-color, #fff);
+          flex: 0 0 36px;
+        }
+        .reload-button[disabled] {
+          opacity: 0.5;
         }
         .catalog {
           display: grid;

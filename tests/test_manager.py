@@ -297,7 +297,7 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert store.record.commit_sha == "commit-sha"
 
 
-def test_reload_reloads_matching_entries_and_keeps_restart_available(
+def test_reload_keeps_restart_required_when_an_entry_fails(
     tmp_path: Path,
 ) -> None:
     """Only configured entries for the repository's domains are reloaded."""
@@ -320,7 +320,7 @@ def test_reload_reloads_matching_entries_and_keeps_restart_available(
         "failing": RuntimeError("reload failed"),
     }
     manager = PrivateHacsManager(hass, _InstallClient(), store)
-    manager._restart_required = True
+    manager._restart_required_repositories.add(record.full_name)
 
     result = asyncio.run(manager.async_reload_repository(record.full_name))
 
@@ -331,6 +331,37 @@ def test_reload_reloads_matching_entries_and_keeps_restart_available(
         "failed_entries": [{"entry_id": "failing", "error": "reload failed"}],
         "restart_required": True,
     }
+
+
+def test_reload_clears_restart_required_after_all_entries_succeed(
+    tmp_path: Path,
+) -> None:
+    """A successful reload clears this integration's pending restart."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=("example",),
+        installed_at="2026-01-01T00:00:00+00:00",
+    )
+    store = _ManagedStore(record)
+    hass = _Hass(tmp_path)
+    hass.config_entries.entries = [
+        types.SimpleNamespace(entry_id="matching", domain="example")
+    ]
+    hass.config_entries.reload_results = {"matching": True}
+    manager = PrivateHacsManager(hass, _InstallClient(), store)
+    manager._restart_required_repositories.add(record.full_name)
+
+    result = asyncio.run(manager.async_reload_repository(record.full_name))
+
+    assert result == {
+        "full_name": record.full_name,
+        "reloaded_entries": ["matching"],
+        "failed_entries": [],
+        "restart_required": False,
+    }
+    assert manager.restart_required is False
 
 
 def test_takeover_allows_replacing_an_external_component(tmp_path: Path) -> None:
