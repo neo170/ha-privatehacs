@@ -19,7 +19,7 @@ DATA_PANEL_STATIC_REGISTERED = "panel_static_registered"
 PANEL_URL_PATH = DOMAIN
 PANEL_COMPONENT_NAME = "privatehacs-panel"
 PANEL_MODULE_URL = f"/{DOMAIN}_static/privatehacs-panel.js"
-PANEL_ICON_URL_PATH = f"/{DOMAIN}_icons"
+PANEL_ICON_URL_PATH = f"/local/{DOMAIN}_icons"
 
 WS_LIST_REPOSITORIES = f"{DOMAIN}/repositories"
 WS_INSTALL_REPOSITORY = f"{DOMAIN}/install"

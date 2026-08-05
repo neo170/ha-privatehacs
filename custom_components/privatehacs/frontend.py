@@ -17,7 +17,6 @@ from .const import (
     DATA_PANEL_STATIC_REGISTERED,
     DOMAIN,
     PANEL_COMPONENT_NAME,
-    PANEL_ICON_URL_PATH,
     PANEL_MODULE_URL,
     PANEL_URL_PATH,
 )
@@ -27,14 +26,9 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     """Serve and register the admin-only PrivateHACS panel."""
     domain_data = hass.data[DOMAIN]
     frontend_path = Path(__file__).parent / "frontend"
-    icon_path = Path(hass.config.path(".storage", f"{DOMAIN}_icons"))
     if not domain_data.get(DATA_PANEL_STATIC_REGISTERED):
-        await hass.async_add_executor_job(icon_path.mkdir, 0o777, True, True)
         await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(f"/{DOMAIN}_static", str(frontend_path), False),
-                StaticPathConfig(PANEL_ICON_URL_PATH, str(icon_path), False),
-            ]
+            [StaticPathConfig(f"/{DOMAIN}_static", str(frontend_path), False)]
         )
         domain_data[DATA_PANEL_STATIC_REGISTERED] = True
 

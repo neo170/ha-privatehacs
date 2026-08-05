@@ -45,9 +45,7 @@ class PrivateHacsManager:
         self._installer = ArchiveInstaller(
             Path(hass.config.path("custom_components")), Path(hass.config.path("www"))
         )
-        self._icon_cache_path = Path(
-            hass.config.path(".storage", f"{DOMAIN}_icons")
-        )
+        self._icon_cache_path = Path(hass.config.path("www", f"{DOMAIN}_icons"))
         self._install_lock = asyncio.Lock()
         self._restart_required = False
 

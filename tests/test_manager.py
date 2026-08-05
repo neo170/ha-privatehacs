@@ -244,9 +244,9 @@ def test_catalog_serves_an_installed_component_brand_icon(tmp_path: Path) -> Non
         PrivateHacsManager(_Hass(tmp_path), _Client(), _Store()).async_get_catalog()
     )
 
-    assert catalog[0]["icon_url"] == "/privatehacs_icons/example.png"
+    assert catalog[0]["icon_url"] == "/local/privatehacs_icons/example.png"
     assert (
-        tmp_path / ".storage" / "privatehacs_icons" / "example.png"
+        tmp_path / "www" / "privatehacs_icons" / "example.png"
     ).read_bytes() == b"icon"
 
 

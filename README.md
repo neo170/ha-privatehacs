@@ -66,7 +66,7 @@ versions. It falls back to a commit revision only when no manifest version is
 available or a source update did not change it.
 
 The catalog displays an integration icon when the installed component supplies
-`brand/icon.png`. PrivateHACS copies only that image into its own static cache;
+`brand/icon.png`. PrivateHACS copies only that image to its own `www` cache;
 it does not expose custom component source files.
 
 After updating **PrivateHACS** itself through HACS, restart Home Assistant. The
