@@ -6,16 +6,22 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+import os
 from pathlib import Path
+import re
+import shutil
 
 from homeassistant.core import HomeAssistant
 from homeassistant import loader
 
+from .const import DOMAIN, PANEL_ICON_URL_PATH
 from .github import GitHubClient, GitHubError
 from .installer import ArchiveInstaller, InstallationError
 from .models import GitHubRepository, InstalledRepository
 from .storage import PrivateHacsStore
 from .versioning import is_newer_version
+
+MAX_BRAND_ICON_SIZE = 1 * 1024 * 1024
 
 
 @dataclass(slots=True)
@@ -36,6 +42,9 @@ class PrivateHacsManager:
         self._client = client
         self._store = store
         self._installer = ArchiveInstaller(Path(hass.config.path("custom_components")))
+        self._icon_cache_path = Path(
+            hass.config.path(".storage", f"{DOMAIN}_icons")
+        )
         self._install_lock = asyncio.Lock()
 
     async def async_get_catalog(self) -> list[dict[str, object]]:
@@ -48,6 +57,11 @@ class PrivateHacsManager:
         installed = {record.full_name: record for record in self._store.values()}
         local_versions = await self._hass.async_add_executor_job(
             _get_local_component_versions, self._installer.custom_components_path
+        )
+        icon_domains = await self._hass.async_add_executor_job(
+            _sync_local_component_icons,
+            self._installer.custom_components_path,
+            self._icon_cache_path,
         )
         semaphore = asyncio.Semaphore(4)
 
@@ -82,6 +96,9 @@ class PrivateHacsManager:
                 for domain, local_version in local_component_versions.items()
             )
             domains = tuple(sorted(set(remote_versions) | set(record.domains if record else ())))
+            icon_domain = next(
+                (domain for domain in domains if domain in icon_domains), None
+            )
 
             return {
                 "full_name": repository.full_name,
@@ -94,6 +111,11 @@ class PrivateHacsManager:
                 "managed_by_privatehacs": managed_by_privatehacs,
                 "managed_externally": managed_externally,
                 "domains": list(domains),
+                "icon_url": (
+                    f"{PANEL_ICON_URL_PATH}/{icon_domain}.png"
+                    if icon_domain is not None
+                    else None
+                ),
                 "local_versions": local_component_versions,
                 "available_versions": remote_versions,
                 "installed_at": record.installed_at if record else None,
@@ -219,3 +241,45 @@ def _get_local_component_versions(custom_components_path: Path) -> dict[str, str
         version = manifest.get("version")
         versions[domain] = version if isinstance(version, str) else None
     return versions
+
+
+def _sync_local_component_icons(
+    custom_components_path: Path, icon_cache_path: Path
+) -> set[str]:
+    """Copy valid local brand icons to the static PrivateHACS cache."""
+    icon_cache_path.mkdir(parents=True, exist_ok=True)
+    icon_domains: set[str] = set()
+
+    try:
+        component_paths = tuple(custom_components_path.iterdir())
+    except OSError:
+        component_paths = ()
+
+    for component_path in component_paths:
+        domain = component_path.name
+        icon_path = component_path / "brand" / "icon.png"
+        if (
+            not component_path.is_dir()
+            or not re.fullmatch(r"[a-z0-9_]+", domain)
+            or icon_path.is_symlink()
+        ):
+            continue
+        try:
+            if not icon_path.is_file() or icon_path.stat().st_size > MAX_BRAND_ICON_SIZE:
+                continue
+            destination = icon_cache_path / f"{domain}.png"
+            temporary = destination.with_suffix(".tmp")
+            shutil.copyfile(icon_path, temporary)
+            os.replace(temporary, destination)
+        except OSError:
+            continue
+        icon_domains.add(domain)
+
+    for cached_icon in icon_cache_path.glob("*.png"):
+        if cached_icon.stem not in icon_domains:
+            try:
+                cached_icon.unlink()
+            except OSError:
+                continue
+
+    return icon_domains

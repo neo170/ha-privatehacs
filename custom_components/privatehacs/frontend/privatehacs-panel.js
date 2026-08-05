@@ -107,14 +107,12 @@ class PrivateHacsPanel extends HTMLElement {
     const icon = document.createElement("img");
     icon.className = "integration-icon";
     const domain = repository.domains?.[0];
-    if (domain) {
-      icon.alt = domain;
-      icon.src = `/api/brands/integration/${encodeURIComponent(domain)}/icon.png`;
+    icon.alt = domain || "";
+    if (repository.icon_url) {
+      icon.src = repository.icon_url;
       icon.addEventListener("error", () => {
         icon.removeAttribute("src");
       });
-    } else {
-      icon.alt = "";
     }
 
     const details = document.createElement("div");

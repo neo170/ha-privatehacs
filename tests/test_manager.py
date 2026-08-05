@@ -161,6 +161,7 @@ def test_externally_managed_integration_is_not_advertised_as_updatable(
             "managed_by_privatehacs": False,
             "managed_externally": True,
             "domains": ["example"],
+            "icon_url": None,
             "local_versions": {"example": "1.0.0"},
             "available_versions": {"example": "1.1.0"},
             "installed_at": None,
@@ -189,3 +190,24 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert installer.allowed_existing == set()
     assert store.record is not None
     assert store.record.commit_sha == "commit-sha"
+
+
+def test_catalog_serves_an_installed_component_brand_icon(tmp_path: Path) -> None:
+    """A local brand icon is copied to PrivateHACS' restricted static cache."""
+    component_path = tmp_path / "custom_components" / "example"
+    component_path.mkdir(parents=True)
+    (component_path / "manifest.json").write_text(
+        json.dumps({"domain": "example", "version": "1.0.0"}), encoding="utf-8"
+    )
+    brand_path = component_path / "brand"
+    brand_path.mkdir()
+    (brand_path / "icon.png").write_bytes(b"icon")
+
+    catalog = asyncio.run(
+        PrivateHacsManager(_Hass(tmp_path), _Client(), _Store()).async_get_catalog()
+    )
+
+    assert catalog[0]["icon_url"] == "/privatehacs_icons/example.png"
+    assert (
+        tmp_path / ".storage" / "privatehacs_icons" / "example.png"
+    ).read_bytes() == b"icon"
