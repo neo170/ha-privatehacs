@@ -160,6 +160,35 @@ class PrivateHacsPanel extends HTMLElement {
     ].some((value) => typeof value === "string" && value.toLowerCase().includes(query)));
   }
 
+  _renderCatalog() {
+    const catalog = this.shadowRoot.querySelector("#catalog");
+    if (!catalog) {
+      return;
+    }
+
+    const labels = this._labels();
+    catalog.replaceChildren();
+    if (this._loading) {
+      const loading = document.createElement("p");
+      loading.className = "loading";
+      loading.textContent = labels.loading;
+      catalog.append(loading);
+      return;
+    }
+
+    const repositories = this._filteredRepositories();
+    if (!repositories.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = this._repositories.length ? labels.noSearchResults : labels.empty;
+      catalog.append(empty);
+      return;
+    }
+    repositories.forEach((repository) => {
+      catalog.append(this._renderRepository(repository, labels));
+    });
+  }
+
   _renderRepository(repository, labels) {
     const row = document.createElement("article");
     row.className = "repository";
@@ -264,12 +293,15 @@ class PrivateHacsPanel extends HTMLElement {
         }
         header {
           align-items: center;
-          background: var(--app-header-background-color, var(--primary-color));
-          color: var(--app-header-text-color, #fff);
+          background: var(--primary-background-color, var(--card-background-color));
+          border-bottom: 1px solid var(--divider-color);
+          box-sizing: border-box;
+          color: var(--primary-text-color);
           display: flex;
+          height: 80px;
           justify-content: space-between;
-          min-height: 64px;
-          padding: 0 16px;
+          min-height: 80px;
+          padding: 0 24px;
         }
         .topbar-title {
           align-items: center;
@@ -293,7 +325,6 @@ class PrivateHacsPanel extends HTMLElement {
           display: flex;
         }
         .search-toolbar {
-          border-bottom: 1px solid var(--divider-color);
           padding: 14px max(16px, calc((100% - 1080px) / 2));
         }
         .search-wrap {
@@ -427,8 +458,9 @@ class PrivateHacsPanel extends HTMLElement {
         }
         @media (max-width: 600px) {
           header {
-            min-height: 56px;
-            padding: 0 8px 0 14px;
+            height: 64px;
+            min-height: 64px;
+            padding: 0 8px 0 16px;
           }
           .search-toolbar {
             padding: 12px 14px;
@@ -497,12 +529,15 @@ class PrivateHacsPanel extends HTMLElement {
     clearSearch.hidden = !this._search;
     search.addEventListener("input", (event) => {
       this._search = event.target.value;
-      this._render();
+      clearSearch.hidden = !this._search;
+      this._renderCatalog();
     });
     clearSearch.addEventListener("click", () => {
       this._search = "";
-      this._render();
-      this.shadowRoot.querySelector("#search").focus();
+      search.value = "";
+      clearSearch.hidden = true;
+      this._renderCatalog();
+      search.focus();
     });
 
     const feedback = this.shadowRoot.querySelector("#feedback");
@@ -518,25 +553,7 @@ class PrivateHacsPanel extends HTMLElement {
       feedback.append(notice);
     }
 
-    const catalog = this.shadowRoot.querySelector("#catalog");
-    if (this._loading) {
-      const loading = document.createElement("p");
-      loading.className = "loading";
-      loading.textContent = labels.loading;
-      catalog.append(loading);
-      return;
-    }
-    const repositories = this._filteredRepositories();
-    if (!repositories.length) {
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = this._repositories.length ? labels.noSearchResults : labels.empty;
-      catalog.append(empty);
-      return;
-    }
-    repositories.forEach((repository) => {
-      catalog.append(this._renderRepository(repository, labels));
-    });
+    this._renderCatalog();
   }
 }
 
