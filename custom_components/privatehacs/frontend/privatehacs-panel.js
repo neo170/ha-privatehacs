@@ -329,7 +329,7 @@ class PrivateHacsPanel extends HTMLElement {
         .search-toolbar {
           box-sizing: border-box;
           margin: 0 auto;
-          max-width: 1080px;
+          max-width: 720px;
           padding: 14px 24px;
         }
         .search-wrap {
