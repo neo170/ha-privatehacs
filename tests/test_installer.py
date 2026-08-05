@@ -90,6 +90,21 @@ def test_install_does_not_overwrite_unmanaged_component(tmp_path: Path) -> None:
     assert (external_component / "__init__.py").read_text(encoding="utf-8") == "EXTERNAL"
 
 
+def test_uninstall_removes_managed_component_directories(tmp_path: Path) -> None:
+    """Removing a managed integration only deletes its domain directory."""
+    custom_components = tmp_path / "custom_components"
+    managed_component = custom_components / "example"
+    managed_component.mkdir(parents=True)
+    (managed_component / "__init__.py").write_text("MANAGED", encoding="utf-8")
+    unrelated_component = custom_components / "unrelated"
+    unrelated_component.mkdir()
+
+    ArchiveInstaller(custom_components).uninstall_components(("example",))
+
+    assert not managed_component.exists()
+    assert unrelated_component.is_dir()
+
+
 def test_install_rejects_path_traversal(tmp_path: Path) -> None:
     archive = _component_archive("example")
     buffer = io.BytesIO(archive)
@@ -141,3 +156,19 @@ def test_lovelace_card_does_not_overwrite_unmanaged_directory(tmp_path: Path) ->
         )
 
     assert (target / "ha-example.js").read_text(encoding="utf-8") == "EXTERNAL"
+
+
+def test_uninstall_removes_privatehacs_lovelace_card(tmp_path: Path) -> None:
+    """Removing a card only deletes its dedicated PrivateHACS asset directory."""
+    card_directory = tmp_path / "www" / "privatehacs" / "ha-example-123456789abc"
+    card_directory.mkdir(parents=True)
+    (card_directory / "ha-example.js").write_text("CARD", encoding="utf-8")
+    unrelated_card = tmp_path / "www" / "privatehacs" / "other-card-123456789abc"
+    unrelated_card.mkdir()
+
+    ArchiveInstaller(tmp_path / "custom_components", tmp_path / "www").uninstall_lovelace_card(
+        "ha-example-123456789abc"
+    )
+
+    assert not card_directory.exists()
+    assert unrelated_card.is_dir()

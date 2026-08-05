@@ -86,6 +86,15 @@ leaves its component directory behind, use the sidebar's confirmed **Take over
 in PrivateHACS** action to replace that stale directory and transfer update
 ownership.
 
+## Uninstalling
+
+PrivateHACS can remove repositories that it manages from the sidebar. For
+custom integrations, first remove any configured integration entry under
+**Settings > Devices & services**, then select **Uninstall** and restart Home
+Assistant. For Lovelace cards, PrivateHACS removes its JavaScript asset and any
+storage-mode resource it registered. It does not modify cards already placed
+on dashboards or YAML-mode resources; remove those manually.
+
 ## Diagnostics
 
 When the sidebar says that no private repositories were found, select

@@ -61,3 +61,19 @@ class PrivateHacsStore:
                     }
                 }
             )
+
+    async def async_remove(self, full_name: str) -> bool:
+        """Remove one PrivateHACS-managed repository record."""
+        async with self._lock:
+            if full_name not in self._repositories:
+                return False
+            del self._repositories[full_name]
+            await self._store.async_save(
+                {
+                    "repositories": {
+                        repository_name: repository.as_dict()
+                        for repository_name, repository in self._repositories.items()
+                    }
+                }
+            )
+            return True

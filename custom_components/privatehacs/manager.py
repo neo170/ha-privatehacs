@@ -247,6 +247,40 @@ class PrivateHacsManager:
                 "restart_required": True,
             }
 
+    async def async_uninstall_repository(self, full_name: str) -> dict[str, object]:
+        """Remove a custom integration or Lovelace card managed by PrivateHACS."""
+        async with self._install_lock:
+            record = self._store.get(full_name)
+            if record is None:
+                raise InstallationError(
+                    "Only integrations installed by PrivateHACS can be removed here."
+                )
+
+            if record.lovelace_filename is not None:
+                await self._hass.async_add_executor_job(
+                    self._installer.uninstall_lovelace_card, record.lovelace_directory
+                )
+                resource_removed = await _async_remove_lovelace_resource(
+                    self._hass, record.lovelace_directory
+                )
+                restart_required = False
+            else:
+                await self._hass.async_add_executor_job(
+                    self._installer.uninstall_components, record.domains
+                )
+                self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+                await loader.async_get_custom_components(self._hass)
+                self._restart_required = True
+                resource_removed = False
+                restart_required = True
+
+            await self._store.async_remove(full_name)
+            return {
+                "full_name": full_name,
+                "lovelace_resource_removed": resource_removed,
+                "restart_required": restart_required,
+            }
+
     def _domain_owners(self) -> dict[str, str]:
         """Map each PrivateHACS-managed domain to its owning repository."""
         return {
@@ -321,6 +355,30 @@ async def _async_upsert_lovelace_resource(
 
     await resources.async_create_item({"res_type": "module", "url": resource_url})
     return True
+
+
+async def _async_remove_lovelace_resource(
+    hass: HomeAssistant, directory_name: str
+) -> bool:
+    """Remove a storage-mode Lovelace resource belonging to one card."""
+    lovelace_data = hass.data.get("lovelace")
+    resources = (
+        lovelace_data.get("resources")
+        if isinstance(lovelace_data, dict)
+        else getattr(lovelace_data, "resources", None)
+    )
+    if resources is None or getattr(resources, "store", None) is None:
+        return False
+
+    if not resources.loaded:
+        await resources.async_load()
+
+    namespace = f"/local/privatehacs/{directory_name}/"
+    for resource in resources.async_items():
+        if resource.get("url", "").startswith(namespace):
+            await resources.async_delete_item(resource["id"])
+            return True
+    return False
 
 
 def _get_local_component_versions(custom_components_path: Path) -> dict[str, str | None]:

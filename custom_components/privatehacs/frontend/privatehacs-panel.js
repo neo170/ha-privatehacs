@@ -40,6 +40,9 @@ class PrivateHacsPanel extends HTMLElement {
           noSearchResults: "Keine passenden Repositories gefunden.",
           install: "Installieren",
           update: "Aktualisieren",
+          uninstall: "Deinstallieren",
+          uninstallConfirmation: "PrivateHACS entfernt die installierten Dateien. Entferne eine eingerichtete Integration vorher unter Einstellungen > Geräte & Dienste. Bei Lovelace-Karten wird auch die gespeicherte Modulressource entfernt. Bereits konfigurierte Dashboard-Karten musst du manuell entfernen. Fortfahren?",
+          uninstalled: "Deinstalliert",
           takeOver: "In PrivateHACS übernehmen",
           takeOverConfirmation: "Die vorhandenen Dateien dieser Integration werden durch die aktuelle Version aus PrivateHACS ersetzt. Die Verwaltung geht an PrivateHACS über. Fortfahren?",
           installed: "Installiert",
@@ -53,6 +56,7 @@ class PrivateHacsPanel extends HTMLElement {
           lovelaceCard: "Lovelace-Karte",
           lovelaceResourceRegistered: "Lovelace-Ressource registriert. Dashboard neu laden.",
           lovelaceResourceManual: "Füge diese Lovelace-Ressource manuell hinzu:",
+          lovelaceResourceManualRemove: "Lovelace-Dateien entfernt. Entferne die manuell konfigurierte Ressource aus dem Dashboard.",
         }
       : {
           title: "PrivateHACS",
@@ -67,6 +71,9 @@ class PrivateHacsPanel extends HTMLElement {
           noSearchResults: "No matching repositories found.",
           install: "Install",
           update: "Update",
+          uninstall: "Uninstall",
+          uninstallConfirmation: "PrivateHACS will remove the installed files. Remove a configured integration first under Settings > Devices & services. For Lovelace cards, it will also remove the stored module resource. Remove any configured dashboard cards manually. Continue?",
+          uninstalled: "Uninstalled",
           takeOver: "Take over in PrivateHACS",
           takeOverConfirmation: "The existing files for this integration will be replaced with the current PrivateHACS version. PrivateHACS will take over management. Continue?",
           installed: "Installed",
@@ -80,6 +87,7 @@ class PrivateHacsPanel extends HTMLElement {
           lovelaceCard: "Lovelace card",
           lovelaceResourceRegistered: "Lovelace resource registered. Reload the dashboard.",
           lovelaceResourceManual: "Add this Lovelace resource manually:",
+          lovelaceResourceManualRemove: "Lovelace files removed. Remove the manually configured resource from the dashboard.",
         };
   }
 
@@ -132,6 +140,36 @@ class PrivateHacsPanel extends HTMLElement {
       await this._loadRepositories();
     } catch (error) {
       this._error = `${this._labels().installFailed}: ${error?.message || String(error)}`;
+    } finally {
+      this._workingRepository = null;
+      this._render();
+    }
+  }
+
+  async _uninstall(repository) {
+    const labels = this._labels();
+    if (!window.confirm(labels.uninstallConfirmation)) {
+      return;
+    }
+
+    this._workingRepository = repository.full_name;
+    this._error = "";
+    this._message = "";
+    this._render();
+    try {
+      const result = await this._hass.callWS({
+        type: "privatehacs/uninstall",
+        repository: repository.full_name,
+      });
+      this._message = repository.lovelace_filename && !result.lovelace_resource_removed
+        ? `${repository.full_name}: ${labels.lovelaceResourceManualRemove}`
+        : `${repository.full_name}: ${labels.uninstalled}`;
+      if (result.restart_required) {
+        this._restartRequired = true;
+      }
+      await this._loadRepositories();
+    } catch (error) {
+      this._error = `${labels.uninstall}: ${error?.message || String(error)}`;
     } finally {
       this._workingRepository = null;
       this._render();
@@ -284,6 +322,14 @@ class PrivateHacsPanel extends HTMLElement {
       install.addEventListener("click", () => this._install(repository, canTakeOver));
       actions.append(install);
     }
+    if (!repository.archived && repository.managed_by_privatehacs) {
+      const uninstall = document.createElement("button");
+      uninstall.className = "uninstall-button";
+      uninstall.textContent = labels.uninstall;
+      uninstall.disabled = isWorking;
+      uninstall.addEventListener("click", () => this._uninstall(repository));
+      actions.append(uninstall);
+    }
 
     const link = document.createElement("a");
     link.href = repository.html_url;
@@ -399,6 +445,14 @@ class PrivateHacsPanel extends HTMLElement {
         button:disabled {
           cursor: default;
           opacity: 0.5;
+        }
+        .uninstall-button {
+          background: transparent;
+          border: 1px solid var(--error-color);
+          color: var(--error-color);
+        }
+        .uninstall-button:hover:not(:disabled) {
+          background: color-mix(in srgb, var(--error-color) 12%, transparent);
         }
         .catalog {
           display: grid;

@@ -105,6 +105,18 @@ class ArchiveInstaller:
 
         return ArchiveContents(domains=(), lovelace_filename=filename)
 
+    def uninstall_components(self, domains: tuple[str, ...]) -> None:
+        """Remove only validated component directories managed by PrivateHACS."""
+        if not domains or any(not re.fullmatch(r"[a-z0-9_]+", domain) for domain in domains):
+            raise InstallationError("Integration has an invalid component path.")
+        self._remove_directories(self._custom_components_path, domains)
+
+    def uninstall_lovelace_card(self, directory_name: str) -> None:
+        """Remove one PrivateHACS-managed Lovelace card directory."""
+        if not re.fullmatch(r"[a-z0-9-]+", directory_name):
+            raise InstallationError("Lovelace card has an invalid installation path.")
+        self._remove_directories(self._www_path / "privatehacs", (directory_name,))
+
     def _collect_components(self, zip_file: ZipFile) -> dict[str, list[ZipInfo]]:
         """Find safe custom-component paths in an archive."""
         members = zip_file.infolist()
@@ -318,6 +330,41 @@ class ArchiveInstaller:
                 if backup.exists():
                     os.replace(backup, self._custom_components_path / domain)
             raise InstallationError("Could not replace the previous integration version.") from err
+
+    @staticmethod
+    def _remove_directories(root: Path, names: tuple[str, ...]) -> None:
+        """Move target directories aside before permanently deleting them."""
+        if not root.is_dir():
+            return
+
+        targets: list[tuple[str, Path]] = []
+        for name in sorted(set(names)):
+            target = root / name
+            if not target.exists():
+                continue
+            if target.is_symlink() or not target.is_dir():
+                raise InstallationError(f"Target path for {name} is not a directory.")
+            targets.append((name, target))
+
+        if not targets:
+            return
+
+        workspace = Path(tempfile.mkdtemp(prefix=".privatehacs-", dir=root))
+        removed_root = workspace / "removed"
+        moved: list[tuple[Path, Path]] = []
+        try:
+            for name, target in targets:
+                backup = removed_root / name
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(target, backup)
+                moved.append((target, backup))
+        except OSError as err:
+            for target, backup in reversed(moved):
+                if backup.exists():
+                    os.replace(backup, target)
+            raise InstallationError("Could not remove the installed files.") from err
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
 
     def _install_lovelace_card(
         self,

@@ -23,3 +23,4 @@ PANEL_ICON_URL_PATH = f"/local/{DOMAIN}_icons"
 
 WS_LIST_REPOSITORIES = f"{DOMAIN}/repositories"
 WS_INSTALL_REPOSITORY = f"{DOMAIN}/install"
+WS_UNINSTALL_REPOSITORY = f"{DOMAIN}/uninstall"

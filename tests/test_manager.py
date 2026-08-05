@@ -58,6 +58,7 @@ def _load_manager_module():
 
 manager_module = _load_manager_module()
 GitHubRepository = manager_module.GitHubRepository
+InstalledRepository = manager_module.InstalledRepository
 PrivateHacsManager = manager_module.PrivateHacsManager
 
 
@@ -125,16 +126,37 @@ class _InstallStore(_Store):
         self.record = record
 
 
+class _ManagedStore(_Store):
+    def __init__(self, record) -> None:
+        self.record = record
+
+    def get(self, full_name: str):
+        return self.record if self.record and self.record.full_name == full_name else None
+
+    def values(self):
+        return (self.record,) if self.record else ()
+
+    async def async_remove(self, full_name: str) -> bool:
+        if self.get(full_name) is None:
+            return False
+        self.record = None
+        return True
+
+
 class _Installer:
     def __init__(self, custom_components_path: Path) -> None:
         self.custom_components_path = custom_components_path
         self.allowed_existing: set[str] | None = None
+        self.uninstalled_domains: tuple[str, ...] | None = None
 
     def inspect_archive(self, _):
         return types.SimpleNamespace(domains=("example",), lovelace_filename=None)
 
     def install_archive(self, _, allowed_existing: set[str]) -> None:
         self.allowed_existing = allowed_existing
+
+    def uninstall_components(self, domains: tuple[str, ...]) -> None:
+        self.uninstalled_domains = domains
 
 
 class _LovelaceInstaller(_Installer):
@@ -146,6 +168,9 @@ class _LovelaceInstaller(_Installer):
     ) -> None:
         self.directory_name = directory_name
         self.allow_existing = allow_existing
+
+    def uninstall_lovelace_card(self, directory_name: str) -> None:
+        self.uninstalled_directory = directory_name
 
 
 class _Resources:
@@ -168,6 +193,9 @@ class _Resources:
         for resource in self.items:
             if resource["id"] == item_id:
                 resource.update(item)
+
+    async def async_delete_item(self, item_id: str) -> None:
+        self.items = [item for item in self.items if item["id"] != item_id]
 
 
 def test_externally_managed_integration_is_not_advertised_as_updatable(
@@ -247,6 +275,75 @@ def test_takeover_allows_replacing_an_external_component(tmp_path: Path) -> None
 
     assert installer.allowed_existing == {"example"}
     assert store.record is not None
+
+
+def test_uninstall_removes_a_privatehacs_managed_integration(tmp_path: Path) -> None:
+    """A managed integration is removed and its runtime is refreshed."""
+    async def async_get_custom_components(_):
+        return {}
+
+    manager_module.loader.DATA_CUSTOM_COMPONENTS = "custom_components"
+    manager_module.loader.async_get_custom_components = async_get_custom_components
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=("example",),
+        installed_at="2026-01-01T00:00:00+00:00",
+    )
+    store = _ManagedStore(record)
+    manager = PrivateHacsManager(_Hass(tmp_path), _InstallClient(), store)
+    installer = _Installer(tmp_path / "custom_components")
+    manager._installer = installer
+
+    result = asyncio.run(manager.async_uninstall_repository(record.full_name))
+
+    assert installer.uninstalled_domains == ("example",)
+    assert store.record is None
+    assert result == {
+        "full_name": "owner/ha-example",
+        "lovelace_resource_removed": False,
+        "restart_required": True,
+    }
+    assert manager.restart_required is True
+
+
+def test_uninstall_removes_a_privatehacs_lovelace_resource(tmp_path: Path) -> None:
+    """A managed Lovelace card removes its asset directory and resource entry."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=(),
+        installed_at="2026-01-01T00:00:00+00:00",
+        lovelace_filename="ha-example.js",
+        lovelace_directory="ha-example-123456789abc",
+    )
+    store = _ManagedStore(record)
+    hass = _Hass(tmp_path)
+    resources = _Resources()
+    resources.items = [
+        {
+            "id": "resource",
+            "res_type": "module",
+            "url": "/local/privatehacs/ha-example-123456789abc/ha-example.js",
+        }
+    ]
+    hass.data["lovelace"] = {"resources": resources}
+    manager = PrivateHacsManager(hass, _InstallClient(), store)
+    installer = _LovelaceInstaller(tmp_path / "custom_components")
+    manager._installer = installer
+
+    result = asyncio.run(manager.async_uninstall_repository(record.full_name))
+
+    assert installer.uninstalled_directory == "ha-example-123456789abc"
+    assert resources.items == []
+    assert store.record is None
+    assert result == {
+        "full_name": "owner/ha-example",
+        "lovelace_resource_removed": True,
+        "restart_required": False,
+    }
 
 
 def test_catalog_serves_an_installed_component_brand_icon(tmp_path: Path) -> None:
