@@ -229,6 +229,26 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert store.record.commit_sha == "commit-sha"
 
 
+def test_takeover_allows_replacing_an_external_component(tmp_path: Path) -> None:
+    """An explicitly requested takeover may replace a stale external folder."""
+    async def async_get_custom_components(_):
+        return {}
+
+    manager_module.loader.DATA_CUSTOM_COMPONENTS = "custom_components"
+    manager_module.loader.async_get_custom_components = async_get_custom_components
+    store = _InstallStore()
+    manager = PrivateHacsManager(_Hass(tmp_path), _InstallClient(), store)
+    installer = _Installer(tmp_path / "custom_components")
+    manager._installer = installer
+
+    asyncio.run(
+        manager.async_install_repository("owner/ha-example", take_over=True)
+    )
+
+    assert installer.allowed_existing == {"example"}
+    assert store.record is not None
+
+
 def test_catalog_serves_an_installed_component_brand_icon(tmp_path: Path) -> None:
     """A local brand icon is copied to PrivateHACS' restricted static cache."""
     component_path = tmp_path / "custom_components" / "example"

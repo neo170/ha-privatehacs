@@ -40,9 +40,11 @@ class PrivateHacsPanel extends HTMLElement {
           noSearchResults: "Keine passenden Repositories gefunden.",
           install: "Installieren",
           update: "Aktualisieren",
+          takeOver: "In PrivateHACS übernehmen",
+          takeOverConfirmation: "Die vorhandenen Dateien dieser Integration werden durch die aktuelle Version aus PrivateHACS ersetzt. Die Verwaltung geht an PrivateHACS über. Fortfahren?",
           installed: "Installiert",
           externallyManaged: "Extern installiert",
-          removeExternalFirst: "Diese Integration ist bereits außerhalb von PrivateHACS installiert. Entferne sie zuerst in HACS (oder manuell), bevor du sie mit PrivateHACS installierst.",
+          removeExternalFirst: "Der Komponentenordner dieser früheren externen Installation ist noch vorhanden. Übernimm sie nur, wenn sie nicht mehr von HACS oder einem anderen Manager verwaltet wird.",
           updateAvailable: "Update verfügbar",
           archived: "Archiviert",
           installFailed: "Installation fehlgeschlagen",
@@ -65,9 +67,11 @@ class PrivateHacsPanel extends HTMLElement {
           noSearchResults: "No matching repositories found.",
           install: "Install",
           update: "Update",
+          takeOver: "Take over in PrivateHACS",
+          takeOverConfirmation: "The existing files for this integration will be replaced with the current PrivateHACS version. PrivateHACS will take over management. Continue?",
           installed: "Installed",
           externallyManaged: "Installed externally",
-          removeExternalFirst: "This integration is already installed outside PrivateHACS. Remove it in HACS (or manually) before installing it with PrivateHACS.",
+          removeExternalFirst: "The component directory from an earlier external installation is still present. Take it over only when it is no longer managed by HACS or another manager.",
           updateAvailable: "Update available",
           archived: "Archived",
           installFailed: "Installation failed",
@@ -99,7 +103,12 @@ class PrivateHacsPanel extends HTMLElement {
     }
   }
 
-  async _install(repository) {
+  async _install(repository, takeOver = false) {
+    const labels = this._labels();
+    if (takeOver && !window.confirm(labels.takeOverConfirmation)) {
+      return;
+    }
+
     this._workingRepository = repository.full_name;
     this._error = "";
     this._message = "";
@@ -108,6 +117,7 @@ class PrivateHacsPanel extends HTMLElement {
       const result = await this._hass.callWS({
         type: "privatehacs/install",
         repository: repository.full_name,
+        take_over: takeOver,
       });
       if (result.lovelace_resource) {
         this._message = `${repository.full_name}: ${result.lovelace_resource_registered
@@ -262,11 +272,16 @@ class PrivateHacsPanel extends HTMLElement {
     const isWorking = this._workingRepository === repository.full_name;
     const canInstall = !repository.installed && !repository.managed_externally;
     const canUpdate = repository.installed && repository.update_available;
-    if (!repository.archived && (canInstall || canUpdate)) {
+    const canTakeOver = repository.managed_externally;
+    if (!repository.archived && (canInstall || canUpdate || canTakeOver)) {
       const install = document.createElement("button");
-      install.textContent = canUpdate ? labels.update : labels.install;
+      install.textContent = canTakeOver
+        ? labels.takeOver
+        : canUpdate
+          ? labels.update
+          : labels.install;
       install.disabled = isWorking;
-      install.addEventListener("click", () => this._install(repository));
+      install.addEventListener("click", () => this._install(repository, canTakeOver));
       actions.append(install);
     }
 
@@ -327,16 +342,14 @@ class PrivateHacsPanel extends HTMLElement {
           display: flex;
         }
         .search-toolbar {
-          box-sizing: border-box;
-          margin: 0 auto;
-          max-width: 720px;
-          padding: 14px 24px;
+          padding: 14px 0;
         }
         .search-wrap {
           align-items: center;
           background: var(--secondary-background-color);
           border: 1px solid var(--divider-color);
           border-radius: 4px;
+          box-sizing: border-box;
           display: flex;
           gap: 8px;
           min-height: 42px;
@@ -470,15 +483,6 @@ class PrivateHacsPanel extends HTMLElement {
         .restart-required span {
           flex: 1 1 220px;
         }
-        .restart-button {
-          background: transparent;
-          color: var(--primary-color);
-          font-weight: 500;
-          padding: 0 4px;
-        }
-        .restart-button:hover:not(:disabled) {
-          background: var(--secondary-background-color);
-        }
         .error {
           border-color: var(--error-color);
         }
@@ -489,7 +493,7 @@ class PrivateHacsPanel extends HTMLElement {
             padding: 0 8px 0 16px;
           }
           .search-toolbar {
-            padding: 12px 14px;
+            padding: 12px 0;
           }
           .content {
             padding: 0 14px 36px;
@@ -521,16 +525,16 @@ class PrivateHacsPanel extends HTMLElement {
             </ha-icon-button>
           </div>
         </header>
-        <div class="search-toolbar">
-          <div class="search-wrap">
-            <ha-icon icon="mdi:magnify"></ha-icon>
-            <input id="search" type="search" autocomplete="off" aria-label="${labels.search}">
-            <ha-icon-button id="clear-search" label="${labels.clearSearch}">
-              <ha-icon icon="mdi:close"></ha-icon>
-            </ha-icon-button>
-          </div>
-        </div>
         <div class="content">
+          <div class="search-toolbar">
+            <div class="search-wrap">
+              <ha-icon icon="mdi:magnify"></ha-icon>
+              <input id="search" type="search" autocomplete="off" aria-label="${labels.search}">
+              <ha-icon-button id="clear-search" label="${labels.clearSearch}">
+                <ha-icon icon="mdi:close"></ha-icon>
+              </ha-icon-button>
+            </div>
+          </div>
           <div id="feedback"></div>
           <section class="catalog" id="catalog"></section>
         </div>

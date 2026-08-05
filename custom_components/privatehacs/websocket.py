@@ -9,7 +9,13 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_RUNTIMES, DATA_WEBSOCKET_REGISTERED, DOMAIN, WS_INSTALL_REPOSITORY, WS_LIST_REPOSITORIES
+from .const import (
+    DATA_RUNTIMES,
+    DATA_WEBSOCKET_REGISTERED,
+    DOMAIN,
+    WS_INSTALL_REPOSITORY,
+    WS_LIST_REPOSITORIES,
+)
 from .github import GitHubError
 from .installer import InstallationError
 from .manager import PrivateHacsManager, PrivateHacsRuntime
@@ -66,7 +72,11 @@ async def websocket_list_repositories(
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): WS_INSTALL_REPOSITORY, vol.Required("repository"): str}
+    {
+        vol.Required("type"): WS_INSTALL_REPOSITORY,
+        vol.Required("repository"): str,
+        vol.Optional("take_over"): bool,
+    }
 )
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -80,7 +90,9 @@ async def websocket_install_repository(
         return
 
     try:
-        result = await manager.async_install_repository(msg["repository"])
+        result = await manager.async_install_repository(
+            msg["repository"], take_over=msg.get("take_over", False)
+        )
     except (GitHubError, InstallationError) as err:
         connection.send_error(msg["id"], "install_failed", str(err))
         return

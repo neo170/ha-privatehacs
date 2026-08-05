@@ -76,12 +76,15 @@ PrivateHACS also reads local `custom_components` manifests. If a displayed
 repository contains an integration already installed by HACS or another method,
 the sidebar shows the installed and current GitHub manifest versions for
 reference. PrivateHACS does not mark externally managed integrations as
-updatable and does not overwrite integrations it did not install itself; update
-them in their original manager, such as HACS.
+updatable and does not overwrite integrations it did not install itself
+automatically; update them in their original manager, such as HACS.
 
 To move an integration from HACS to PrivateHACS, first remove it in HACS. Both
 managers install the component into the same domain directory, so they cannot
-manage two copies of the same integration.
+manage two copies of the same integration. If a removed external integration
+leaves its component directory behind, use the sidebar's confirmed **Take over
+in PrivateHACS** action to replace that stale directory and transfer update
+ownership.
 
 ## Diagnostics
 

@@ -139,7 +139,9 @@ class PrivateHacsManager:
 
         return await asyncio.gather(*(build_item(repository) for repository in repositories))
 
-    async def async_install_repository(self, full_name: str) -> dict[str, object]:
+    async def async_install_repository(
+        self, full_name: str, *, take_over: bool = False
+    ) -> dict[str, object]:
         """Install or update all custom components published by one private repository."""
         async with self._install_lock:
             repository = await self._client.async_get_repository(full_name)
@@ -220,6 +222,8 @@ class PrivateHacsManager:
                 )
 
             allowed_existing = set(current.domains) if current else set()
+            if take_over:
+                allowed_existing.update(contents.domains)
             await self._hass.async_add_executor_job(
                 self._installer.install_archive, archive, allowed_existing
             )
