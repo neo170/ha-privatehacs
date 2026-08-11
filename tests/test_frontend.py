@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -52,3 +53,31 @@ def test_frontend_module_url_uses_the_asset_content_hash(tmp_path: Path) -> None
 
     expected_hash = hashlib.sha256(content).hexdigest()[:12]
     assert module_url == f"/privatehacs_static/privatehacs-panel.js?v={expected_hash}"
+
+
+def test_register_panel_hashes_the_asset_in_the_executor(tmp_path: Path) -> None:
+    """Panel asset I/O is delegated away from the event loop."""
+    executed_functions = []
+
+    class Http:
+        async def async_register_static_paths(self, _paths) -> None:
+            pass
+
+    class Hass:
+        http = Http()
+
+        def __init__(self) -> None:
+            self.data = {
+                frontend_module.DOMAIN: {
+                    frontend_module.DATA_PANEL_STATIC_REGISTERED: True
+                }
+            }
+
+        async def async_add_executor_job(self, func, *args):
+            executed_functions.append(func)
+            return func(*args)
+
+    hass = Hass()
+    asyncio.run(frontend_module.async_register_panel(hass))
+
+    assert executed_functions == [frontend_module._frontend_module_url]

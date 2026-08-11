@@ -35,6 +35,8 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     if async_panel_exists(hass, PANEL_URL_PATH):
         return
 
+    module_url = await hass.async_add_executor_job(_frontend_module_url, frontend_path)
+
     async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -44,7 +46,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         config={
             "_panel_custom": {
                 "name": PANEL_COMPONENT_NAME,
-                "module_url": _frontend_module_url(frontend_path),
+                "module_url": module_url,
                 "embed_iframe": False,
                 "trust_external": False,
             }
