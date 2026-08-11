@@ -21,6 +21,7 @@ from .github import GitHubClient, GitHubError
 from .installer import ArchiveInstaller, InstallationError
 from .models import GitHubRepository, InstalledRepository
 from .storage import PrivateHacsStore
+from .versioning import versions_equal
 
 MAX_BRAND_ICON_SIZE = 1 * 1024 * 1024
 
@@ -87,6 +88,7 @@ class PrivateHacsManager:
             record = installed.get(repository.full_name)
             remote_versions: dict[str, str | None] = {}
             latest_release = None
+            release_commit: str | None = None
             async with semaphore:
                 try:
                     latest_release = await self._client.async_get_latest_release(
@@ -105,6 +107,18 @@ class PrivateHacsManager:
                     )
                 except GitHubError:
                     remote_versions = {}
+                if (
+                    record is not None
+                    and record.release_tag is None
+                    and record.lovelace_filename is not None
+                    and latest_release is not None
+                ):
+                    try:
+                        release_commit = await self._client.async_get_commit_sha(
+                            repository.full_name, latest_release.tag_name
+                        )
+                    except GitHubError:
+                        release_commit = None
 
             local_component_versions = {
                 domain: local_versions[domain]
@@ -116,10 +130,13 @@ class PrivateHacsManager:
             available_version = (
                 latest_release.tag_name if latest_release is not None else None
             )
+            installed_version = _installed_release_version(
+                record, available_version, local_component_versions, release_commit
+            )
             release_update_available = bool(
                 managed_by_privatehacs
                 and available_version is not None
-                and record.release_tag != available_version
+                and installed_version != available_version
             )
             domains = tuple(sorted(set(remote_versions) | set(record.domains if record else ())))
             icon_domain = next(
@@ -146,7 +163,7 @@ class PrivateHacsManager:
                 "local_versions": local_component_versions,
                 "available_versions": remote_versions,
                 "installed_at": record.installed_at if record else None,
-                "installed_version": record.release_tag if record else None,
+                "installed_version": installed_version,
                 "available_version": available_version,
                 "release_url": latest_release.html_url if latest_release else None,
                 "update_available": not managed_externally and release_update_available,
@@ -396,6 +413,30 @@ def _lovelace_directory_name(full_name: str) -> str:
 def _lovelace_resource_url(directory_name: str, filename: str, version: str) -> str:
     """Return the cache-busted local URL for an installed Lovelace card."""
     return f"/local/privatehacs/{directory_name}/{filename}?v={quote(version, safe='.-_')}"
+
+
+def _installed_release_version(
+    record: InstalledRepository | None,
+    available_version: str | None,
+    local_component_versions: dict[str, str | None],
+    release_commit: str | None,
+) -> str | None:
+    """Resolve a release tag for records stored before release tags were persisted."""
+    if record is None:
+        return None
+    if record.release_tag is not None:
+        return record.release_tag
+    if available_version is None:
+        return None
+
+    if record.domains and set(record.domains).issubset(local_component_versions):
+        versions = [local_component_versions[domain] for domain in record.domains]
+        if all(versions_equal(version, available_version) for version in versions):
+            return available_version
+
+    if record.lovelace_filename is not None and record.commit_sha == release_commit:
+        return available_version
+    return None
 
 
 async def _async_upsert_lovelace_resource(

@@ -117,6 +117,9 @@ class _Client:
             html_url="https://example.test/owner/ha-example/releases/tag/1.1.0",
         )
 
+    async def async_get_commit_sha(self, *_):
+        return "commit-sha"
+
 
 class _Store:
     def values(self):
@@ -124,6 +127,14 @@ class _Store:
 
     def get(self, _):
         return None
+
+
+class _PrefixedReleaseClient(_Client):
+    async def async_get_latest_release(self, *_):
+        return types.SimpleNamespace(
+            tag_name="v1.1.0",
+            html_url="https://example.test/owner/ha-example/releases/tag/v1.1.0",
+        )
 
 
 def test_catalog_uses_the_last_loaded_state_until_refreshed(tmp_path: Path) -> None:
@@ -520,8 +531,10 @@ def test_lovelace_card_is_installed_and_registered_as_a_module(tmp_path: Path) -
     assert installer.allow_existing is False
 
 
-def test_legacy_lovelace_installation_is_offered_a_release_update(tmp_path: Path) -> None:
-    """A commit-based card installation is migrated by reinstalling its release."""
+def test_legacy_lovelace_installation_matching_the_release_is_current(
+    tmp_path: Path,
+) -> None:
+    """A card already installed from the release commit is not offered again."""
     record = InstalledRepository(
         full_name="owner/ha-example",
         default_branch="main",
@@ -533,9 +546,35 @@ def test_legacy_lovelace_installation_is_offered_a_release_update(tmp_path: Path
     )
 
     catalog = asyncio.run(
+        PrivateHacsManager(
+            _Hass(tmp_path), _PrefixedReleaseClient(), _ManagedStore(record)
+        ).async_get_catalog()
+    )
+
+    assert catalog[0]["installed_version"] == "v1.1.0"
+    assert catalog[0]["available_version"] == "v1.1.0"
+    assert catalog[0]["update_available"] is False
+
+
+def test_legacy_component_matching_the_release_is_current(tmp_path: Path) -> None:
+    """Matching manifest versions migrate old component records without an update."""
+    manifest_path = tmp_path / "custom_components" / "example" / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({"domain": "example", "version": "1.1.0"}), encoding="utf-8"
+    )
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=("example",),
+        installed_at="2026-01-01T00:00:00+00:00",
+    )
+
+    catalog = asyncio.run(
         PrivateHacsManager(_Hass(tmp_path), _Client(), _ManagedStore(record)).async_get_catalog()
     )
 
-    assert catalog[0]["installed_version"] is None
+    assert catalog[0]["installed_version"] == "1.1.0"
     assert catalog[0]["available_version"] == "1.1.0"
-    assert catalog[0]["update_available"] is True
+    assert catalog[0]["update_available"] is False

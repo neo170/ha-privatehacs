@@ -31,3 +31,11 @@ def test_is_newer_version_handles_manifest_versions() -> None:
     assert not versioning.is_newer_version("1.2.0rc1", "1.2.0")
     assert not versioning.is_newer_version("1.2.0", "1.2")
     assert not versioning.is_newer_version("invalid", "1.0.0")
+
+
+def test_versions_equal_normalizes_release_tag_prefixes() -> None:
+    """Release tags and manifest versions can use different v-prefixes."""
+    assert versioning.versions_equal("v1.5.22", "1.5.22")
+    assert versioning.versions_equal("1.2", "1.2.0")
+    assert not versioning.versions_equal("1.2.0", "1.2.1")
+    assert not versioning.versions_equal("invalid", "1.2.0")

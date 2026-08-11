@@ -25,6 +25,16 @@ def is_newer_version(available: str | None, installed: str | None) -> bool:
     )
 
 
+def versions_equal(left: str | None, right: str | None) -> bool:
+    """Return whether two parseable release versions describe the same version."""
+    if not left or not right:
+        return False
+
+    left_key = _version_key(left)
+    right_key = _version_key(right)
+    return bool(left_key is not None and left_key == right_key)
+
+
 def _version_key(version: str) -> tuple[tuple[int, ...], int, int] | None:
     """Create a comparable key for common Home Assistant manifest versions."""
     match = _VERSION_PATTERN.fullmatch(version.strip())
