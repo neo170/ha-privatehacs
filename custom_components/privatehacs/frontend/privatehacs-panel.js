@@ -60,7 +60,6 @@ class PrivateHacsPanel extends HTMLElement {
           reloadNoEntries: "Keine eingerichteten Integrationseinträge zum Neuladen gefunden.",
           reloadPartial: "Einige Integrationseinträge konnten nicht neu geladen werden:",
           reloadFailed: "Neuladen fehlgeschlagen",
-          lovelaceCard: "Lovelace-Karte",
           lovelaceResourceRegistered: "Lovelace-Ressource registriert. Dashboard neu laden.",
           lovelaceResourceManual: "Füge diese Lovelace-Ressource manuell hinzu:",
           lovelaceResourceManualRemove: "Lovelace-Dateien entfernt. Entferne die manuell konfigurierte Ressource aus dem Dashboard.",
@@ -98,7 +97,6 @@ class PrivateHacsPanel extends HTMLElement {
           reloadNoEntries: "No configured integration entries were found to reload.",
           reloadPartial: "Some integration entries could not be reloaded:",
           reloadFailed: "Reload failed",
-          lovelaceCard: "Lovelace card",
           lovelaceResourceRegistered: "Lovelace resource registered. Reload the dashboard.",
           lovelaceResourceManual: "Add this Lovelace resource manually:",
           lovelaceResourceManualRemove: "Lovelace files removed. Remove the manually configured resource from the dashboard.",
@@ -328,6 +326,11 @@ class PrivateHacsPanel extends HTMLElement {
 
     const metadata = document.createElement("p");
     metadata.className = "metadata";
+    const lovelaceVersion = repository.lovelace_filename && repository.installed_commit
+      ? repository.update_available && repository.available_commit
+        ? `${repository.lovelace_filename}: ${repository.installed_commit.slice(0, 12)} -> ${repository.available_commit.slice(0, 12)}`
+        : `${repository.lovelace_filename}: ${repository.installed_commit.slice(0, 12)}`
+      : "";
     const versions = Object.entries(repository.local_versions || {}).map(([domain, local]) => {
       const remote = repository.available_versions?.[domain];
       return repository.update_available && remote
@@ -335,7 +338,7 @@ class PrivateHacsPanel extends HTMLElement {
         : `${domain}: ${local || "?"}`;
     });
     metadata.textContent = repository.lovelace_filename
-      ? `${labels.lovelaceCard}: ${repository.lovelace_filename}`
+      ? lovelaceVersion || repository.lovelace_filename
       : versions.length
         ? versions.join(", ")
         : repository.domains.length
