@@ -13,7 +13,7 @@ from typing import Any
 from aiohttp import ClientResponse, ClientSession
 
 from .const import GITHUB_API_URL, GITHUB_API_VERSION
-from .models import GitHubAccount, GitHubRepository
+from .models import GitHubAccount, GitHubRelease, GitHubRepository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -181,6 +181,19 @@ class GitHubClient:
         if not isinstance(sha, str) or not sha:
             raise GitHubError("GitHub returned an invalid commit response.")
         return sha
+
+    async def async_get_latest_release(
+        self, full_name: str
+    ) -> GitHubRelease | None:
+        """Return the latest published release, if the repository has one."""
+        try:
+            payload = await self._async_get_json(f"/repos/{full_name}/releases/latest")
+        except GitHubNotFoundError:
+            return None
+        try:
+            return GitHubRelease.from_api(payload)
+        except ValueError as err:
+            raise GitHubError(str(err)) from err
 
     async def async_get_integration_versions(
         self, full_name: str, ref: str

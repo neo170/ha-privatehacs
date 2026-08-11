@@ -117,7 +117,7 @@ class _Coordinator:
 class _Manager:
     async def async_install_repository(self, full_name: str) -> dict[str, object]:
         self.installed = full_name
-        return {"commit": "fedcba9876543210"}
+        return {"version": "1.1.0"}
 
 
 def test_update_entity_exposes_and_installs_a_github_revision() -> None:
@@ -128,16 +128,16 @@ def test_update_entity_exposes_and_installs_a_github_revision() -> None:
         commit_sha="0123456789abcdef",
         domains=("example",),
         installed_at="2026-08-05T00:00:00+00:00",
+        release_tag="1.0.0",
     )
     coordinator = _Coordinator(
         [
             {
                 "full_name": record.full_name,
-                "available_commit": "fedcba9876543210",
                 "update_available": True,
-                "local_versions": {"example": "1.0.0"},
-                "available_versions": {"example": "1.1.0"},
-                "html_url": "https://github.test/owner/ha-example",
+                "installed_version": "1.0.0",
+                "available_version": "1.1.0",
+                "release_url": "https://github.test/owner/ha-example/releases/tag/1.1.0",
             }
         ]
     )
@@ -149,16 +149,17 @@ def test_update_entity_exposes_and_installs_a_github_revision() -> None:
     assert entity.installed_version == "1.0.0"
     assert entity.latest_version == "1.1.0"
     assert entity.version_is_newer(entity.latest_version, entity.installed_version)
+    assert entity.release_url.endswith("/releases/tag/1.1.0")
 
     asyncio.run(entity.async_install(None, False))
 
     assert manager.installed == record.full_name
     assert coordinator.refreshes == 1
-    assert "Optionally reload configured entries" in notifications.notifications[-1][0][1]
+    assert "GitHub release 1.1.0" in notifications.notifications[-1][0][1]
 
 
-def test_update_entity_uses_revisions_when_manifest_versions_are_equal() -> None:
-    """A source-only update stays installable when its manifest version is unchanged."""
+def test_update_entity_offers_a_release_for_a_legacy_installation() -> None:
+    """A commit-based legacy record is upgraded to the latest release tag."""
     record = InstalledRepository(
         full_name="owner/ha-example",
         default_branch="main",
@@ -170,14 +171,14 @@ def test_update_entity_uses_revisions_when_manifest_versions_are_equal() -> None
         [
             {
                 "full_name": record.full_name,
-                "available_commit": "fedcba9876543210",
                 "update_available": True,
-                "local_versions": {"example": "1.0.0"},
-                "available_versions": {"example": "1.0.0"},
+                "installed_version": None,
+                "available_version": "1.0.0",
+                "release_url": "https://github.test/owner/ha-example/releases/tag/1.0.0",
             }
         ]
     )
     entity = PrivateHacsRepositoryUpdateEntity("entry", _Manager(), coordinator, record)
 
-    assert entity.installed_version == "1.0.0 (0123456789ab)"
-    assert entity.latest_version == "1.0.0 (fedcba987654)"
+    assert entity.installed_version == "unversioned"
+    assert entity.latest_version == "1.0.0"

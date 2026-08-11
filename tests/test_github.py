@@ -95,6 +95,18 @@ class _ContentsSession:
         raise AssertionError(f"Unexpected URL: {url}")
 
 
+class _ReleaseSession:
+    def get(self, url: str, **_: object) -> _ContentsResponse:
+        if url.endswith("/releases/latest"):
+            return _ContentsResponse(
+                {
+                    "tag_name": "1.2.0",
+                    "html_url": "https://example.test/owner/ha-example/releases/tag/1.2.0",
+                }
+            )
+        raise AssertionError(f"Unexpected URL: {url}")
+
+
 def test_catalog_filters_private_repositories_and_redacts_diagnostics() -> None:
     """Catalog lookup does not rely on GitHub's visibility filter."""
     session = _Session()
@@ -128,3 +140,14 @@ def test_get_integration_versions_reads_remote_manifests() -> None:
     )
 
     assert versions == {"example": "1.2.0"}
+
+
+def test_get_latest_release_reads_the_published_release_tag() -> None:
+    """PrivateHACS uses GitHub releases as installable repository versions."""
+    client = github.GitHubClient(_ReleaseSession(), "owner", "secret-token")
+
+    release = asyncio.run(client.async_get_latest_release("owner/ha-example"))
+
+    assert release is not None
+    assert release.tag_name == "1.2.0"
+    assert release.html_url.endswith("/releases/tag/1.2.0")

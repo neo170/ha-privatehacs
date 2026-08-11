@@ -51,6 +51,23 @@ class GitHubRepository:
 
 
 @dataclass(frozen=True, slots=True)
+class GitHubRelease:
+    """A published GitHub release used as an installable version."""
+
+    tag_name: str
+    html_url: str
+
+    @classmethod
+    def from_api(cls, payload: dict[str, Any]) -> GitHubRelease:
+        """Build a release model from the GitHub REST response."""
+        tag_name = payload.get("tag_name")
+        html_url = payload.get("html_url")
+        if not all(isinstance(value, str) and value for value in (tag_name, html_url)):
+            raise ValueError("GitHub returned a release without required metadata.")
+        return cls(tag_name=tag_name, html_url=html_url)
+
+
+@dataclass(frozen=True, slots=True)
 class InstalledRepository:
     """The local record of an integration repository installed by PrivateHACS."""
 
@@ -61,6 +78,7 @@ class InstalledRepository:
     installed_at: str
     lovelace_filename: str | None = None
     lovelace_directory: str | None = None
+    release_tag: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Serialize the record for Home Assistant storage."""
@@ -72,6 +90,7 @@ class InstalledRepository:
             "installed_at": self.installed_at,
             "lovelace_filename": self.lovelace_filename,
             "lovelace_directory": self.lovelace_directory,
+            "release_tag": self.release_tag,
         }
 
     @classmethod
@@ -84,6 +103,7 @@ class InstalledRepository:
         domains = payload.get("domains")
         lovelace_filename = payload.get("lovelace_filename")
         lovelace_directory = payload.get("lovelace_directory")
+        release_tag = payload.get("release_tag")
         if not all(isinstance(value, str) and value for value in (
             full_name,
             default_branch,
@@ -103,6 +123,10 @@ class InstalledRepository:
             not domains and lovelace_filename is None
         ):
             raise ValueError("Invalid installed repository record.")
+        if release_tag is not None and (
+            not isinstance(release_tag, str) or not release_tag
+        ):
+            raise ValueError("Invalid installed repository record.")
 
         return cls(
             full_name=full_name,
@@ -112,4 +136,5 @@ class InstalledRepository:
             installed_at=installed_at,
             lovelace_filename=lovelace_filename,
             lovelace_directory=lovelace_directory,
+            release_tag=release_tag,
         )

@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
 from homeassistant import loader
@@ -20,7 +21,6 @@ from .github import GitHubClient, GitHubError
 from .installer import ArchiveInstaller, InstallationError
 from .models import GitHubRepository, InstalledRepository
 from .storage import PrivateHacsStore
-from .versioning import is_newer_version
 
 MAX_BRAND_ICON_SIZE = 1 * 1024 * 1024
 
@@ -85,22 +85,26 @@ class PrivateHacsManager:
 
         async def build_item(repository: GitHubRepository) -> dict[str, object]:
             record = installed.get(repository.full_name)
-            remote_commit: str | None = None
             remote_versions: dict[str, str | None] = {}
+            latest_release = None
             async with semaphore:
                 try:
+                    latest_release = await self._client.async_get_latest_release(
+                        repository.full_name
+                    )
+                except GitHubError:
+                    latest_release = None
+                try:
                     remote_versions = await self._client.async_get_integration_versions(
-                        repository.full_name, repository.default_branch
+                        repository.full_name,
+                        (
+                            latest_release.tag_name
+                            if latest_release is not None
+                            else repository.default_branch
+                        ),
                     )
                 except GitHubError:
                     remote_versions = {}
-                if record is not None:
-                    try:
-                        remote_commit = await self._client.async_get_commit_sha(
-                            repository.full_name, repository.default_branch
-                        )
-                    except GitHubError:
-                        remote_commit = None
 
             local_component_versions = {
                 domain: local_versions[domain]
@@ -109,9 +113,13 @@ class PrivateHacsManager:
             }
             managed_by_privatehacs = record is not None
             managed_externally = bool(local_component_versions) and not managed_by_privatehacs
-            version_update_available = any(
-                is_newer_version(remote_versions[domain], local_version)
-                for domain, local_version in local_component_versions.items()
+            available_version = (
+                latest_release.tag_name if latest_release is not None else None
+            )
+            release_update_available = bool(
+                managed_by_privatehacs
+                and available_version is not None
+                and record.release_tag != available_version
             )
             domains = tuple(sorted(set(remote_versions) | set(record.domains if record else ())))
             icon_domain = next(
@@ -138,19 +146,10 @@ class PrivateHacsManager:
                 "local_versions": local_component_versions,
                 "available_versions": remote_versions,
                 "installed_at": record.installed_at if record else None,
-                "installed_commit": record.commit_sha if record else None,
-                "available_commit": remote_commit,
-                "update_available": bool(
-                    not managed_externally
-                    and (
-                        version_update_available
-                        or (
-                            managed_by_privatehacs
-                            and remote_commit is not None
-                            and record.commit_sha != remote_commit
-                        )
-                    )
-                ),
+                "installed_version": record.release_tag if record else None,
+                "available_version": available_version,
+                "release_url": latest_release.html_url if latest_release else None,
+                "update_available": not managed_externally and release_update_available,
             }
 
         return await asyncio.gather(*(build_item(repository) for repository in repositories))
@@ -164,11 +163,16 @@ class PrivateHacsManager:
             if not _is_privatehacs_repository(repository):
                 raise InstallationError("Only repositories whose name starts with ha- are supported.")
             current = self._store.get(repository.full_name)
+            release = await self._client.async_get_latest_release(repository.full_name)
+            if release is None:
+                raise InstallationError(
+                    "Repository has no published GitHub release to install."
+                )
             commit_sha = await self._client.async_get_commit_sha(
-                repository.full_name, repository.default_branch
+                repository.full_name, release.tag_name
             )
             archive = await self._client.async_download_archive(
-                repository.full_name, commit_sha
+                repository.full_name, release.tag_name
             )
             contents = await self._hass.async_add_executor_job(
                 self._installer.inspect_archive, archive
@@ -198,10 +202,11 @@ class PrivateHacsManager:
                     installed_at=datetime.now(UTC).isoformat(),
                     lovelace_filename=contents.lovelace_filename,
                     lovelace_directory=directory_name,
+                    release_tag=release.tag_name,
                 )
                 await self._store.async_upsert(record)
                 resource_url = _lovelace_resource_url(
-                    directory_name, contents.lovelace_filename, commit_sha
+                    directory_name, contents.lovelace_filename, release.tag_name
                 )
                 resource_registered = await _async_upsert_lovelace_resource(
                     self._hass, directory_name, resource_url
@@ -210,7 +215,7 @@ class PrivateHacsManager:
                 return {
                     "full_name": record.full_name,
                     "domains": [],
-                    "commit": record.commit_sha,
+                    "version": record.release_tag,
                     "lovelace_resource": resource_url,
                     "lovelace_resource_registered": resource_registered,
                     "restart_required": False,
@@ -251,6 +256,7 @@ class PrivateHacsManager:
                 commit_sha=commit_sha,
                 domains=contents.domains,
                 installed_at=datetime.now(UTC).isoformat(),
+                release_tag=release.tag_name,
             )
             await self._store.async_upsert(record)
             self._hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
@@ -261,7 +267,7 @@ class PrivateHacsManager:
             return {
                 "full_name": record.full_name,
                 "domains": list(record.domains),
-                "commit": record.commit_sha,
+                "version": record.release_tag,
                 "restart_required": True,
             }
 
@@ -387,9 +393,9 @@ def _lovelace_directory_name(full_name: str) -> str:
     return f"{safe_name}-{digest}"
 
 
-def _lovelace_resource_url(directory_name: str, filename: str, commit_sha: str) -> str:
+def _lovelace_resource_url(directory_name: str, filename: str, version: str) -> str:
     """Return the cache-busted local URL for an installed Lovelace card."""
-    return f"/local/privatehacs/{directory_name}/{filename}?v={commit_sha[:12]}"
+    return f"/local/privatehacs/{directory_name}/{filename}?v={quote(version, safe='.-_')}"
 
 
 async def _async_upsert_lovelace_resource(

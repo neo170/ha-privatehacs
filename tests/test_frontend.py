@@ -44,8 +44,8 @@ def _load_frontend_module():
 frontend_module = _load_frontend_module()
 
 
-def test_panel_displays_lovelace_revisions_like_integrations() -> None:
-    """Lovelace cards use the same installed-to-available version format."""
+def test_panel_displays_lovelace_release_tags() -> None:
+    """Lovelace cards display installed and available release tags."""
     panel_source = (
         Path(__file__).parents[1]
         / "custom_components"
@@ -54,10 +54,10 @@ def test_panel_displays_lovelace_revisions_like_integrations() -> None:
         / "privatehacs-panel.js"
     ).read_text(encoding="utf-8")
 
-    assert "const lovelaceVersion = repository.lovelace_filename" in panel_source
-    assert "repository.installed_commit.slice(0, 12)" in panel_source
-    assert "repository.update_available && repository.available_commit" in panel_source
-    assert "repository.available_commit.slice(0, 12)" in panel_source
+    assert "const releaseVersion = repository.available_version" in panel_source
+    assert "repository.installed_version || labels.unversioned" in panel_source
+    assert "repository.installed_commit" not in panel_source
+    assert "repository.available_commit" not in panel_source
 
 
 def test_frontend_module_url_uses_the_asset_content_hash(tmp_path: Path) -> None:

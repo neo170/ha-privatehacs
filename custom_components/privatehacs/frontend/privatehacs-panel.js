@@ -63,6 +63,7 @@ class PrivateHacsPanel extends HTMLElement {
           lovelaceResourceRegistered: "Lovelace-Ressource registriert. Dashboard neu laden.",
           lovelaceResourceManual: "Füge diese Lovelace-Ressource manuell hinzu:",
           lovelaceResourceManualRemove: "Lovelace-Dateien entfernt. Entferne die manuell konfigurierte Ressource aus dem Dashboard.",
+          unversioned: "ohne Release-Version",
         }
       : {
           title: "PrivateHACS",
@@ -100,6 +101,7 @@ class PrivateHacsPanel extends HTMLElement {
           lovelaceResourceRegistered: "Lovelace resource registered. Reload the dashboard.",
           lovelaceResourceManual: "Add this Lovelace resource manually:",
           lovelaceResourceManualRemove: "Lovelace files removed. Remove the manually configured resource from the dashboard.",
+          unversioned: "without a release version",
         };
   }
 
@@ -326,10 +328,10 @@ class PrivateHacsPanel extends HTMLElement {
 
     const metadata = document.createElement("p");
     metadata.className = "metadata";
-    const lovelaceVersion = repository.lovelace_filename && repository.installed_commit
-      ? repository.update_available && repository.available_commit
-        ? `${repository.lovelace_filename}: ${repository.installed_commit.slice(0, 12)} -> ${repository.available_commit.slice(0, 12)}`
-        : `${repository.lovelace_filename}: ${repository.installed_commit.slice(0, 12)}`
+    const releaseVersion = repository.available_version
+      ? repository.update_available
+        ? `${repository.installed_version || labels.unversioned} -> ${repository.available_version}`
+        : repository.installed_version || repository.available_version
       : "";
     const versions = Object.entries(repository.local_versions || {}).map(([domain, local]) => {
       const remote = repository.available_versions?.[domain];
@@ -338,7 +340,11 @@ class PrivateHacsPanel extends HTMLElement {
         : `${domain}: ${local || "?"}`;
     });
     metadata.textContent = repository.lovelace_filename
-      ? lovelaceVersion || repository.lovelace_filename
+      ? releaseVersion
+        ? `${repository.lovelace_filename}: ${releaseVersion}`
+        : repository.lovelace_filename
+      : releaseVersion
+        ? releaseVersion
       : versions.length
         ? versions.join(", ")
         : repository.domains.length

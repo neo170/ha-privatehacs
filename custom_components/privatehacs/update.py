@@ -74,59 +74,28 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
 
     @property
     def installed_version(self) -> str:
-        """Return the local manifest version, with a commit fallback."""
+        """Return the release tag that was installed by PrivateHACS."""
         repository = self._catalog_entry
-        local_version = _manifest_version_label(
-            repository.get("local_versions") if repository else None
-        )
-        if local_version is None:
-            return _short_revision(self._record.commit_sha)
-
-        available_version = _manifest_version_label(
-            repository.get("available_versions") if repository else None
-        )
-        if (
-            repository
-            and repository.get("update_available")
-            and local_version == available_version
-        ):
-            return _version_with_revision(local_version, self._record.commit_sha)
-        return local_version
+        version = repository.get("installed_version") if repository else None
+        return version if isinstance(version, str) and version else "unversioned"
 
     @property
     def latest_version(self) -> str | None:
-        """Return the available manifest version, or a commit fallback."""
+        """Return the latest published GitHub release tag."""
         repository = self._catalog_entry
         if repository is None:
             return None
 
-        if not repository.get("update_available"):
-            return self.installed_version
-
-        available_version = _manifest_version_label(
-            repository.get("available_versions")
-        )
-        local_version = _manifest_version_label(repository.get("local_versions"))
-        if available_version is not None:
-            if available_version != local_version:
-                return available_version
-
-            available_commit = repository.get("available_commit")
-            if isinstance(available_commit, str) and available_commit:
-                return _version_with_revision(available_version, available_commit)
-            return _manifest_version_marker(repository.get("available_versions"))
-
-        available_commit = repository.get("available_commit")
-        if isinstance(available_commit, str) and available_commit:
-            return _short_revision(available_commit)
-
-        return _manifest_version_marker(repository.get("available_versions"))
+        version = repository.get("available_version")
+        if repository.get("update_available") and isinstance(version, str) and version:
+            return version
+        return self.installed_version
 
     @property
     def release_url(self) -> str | None:
-        """Return the GitHub repository where the available revision is published."""
+        """Return the GitHub page for the available release."""
         repository = self._catalog_entry
-        html_url = repository.get("html_url") if repository else None
+        html_url = repository.get("release_url") if repository else None
         return html_url if isinstance(html_url, str) else None
 
     @property
@@ -135,28 +104,28 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
         if self.latest_version == self.installed_version:
             return None
         return (
-            "Update from the configured GitHub default branch. Optionally reload "
+            f"Update to GitHub release {self.latest_version}. Optionally reload "
             "configured entries in PrivateHACS, or restart Home Assistant."
         )
 
     def version_is_newer(
         self, latest_version: str, installed_version: str
     ) -> bool:
-        """Use PrivateHACS' commit and manifest comparison result."""
+        """Use PrivateHACS' release comparison result."""
         repository = self._catalog_entry
         return bool(repository and repository.get("update_available"))
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
-        """Install the current default-branch revision of this repository."""
+        """Install the latest published GitHub release of this repository."""
         if version is not None:
             raise HomeAssistantError("PrivateHACS only installs the current default branch.")
 
         result = await self._manager.async_install_repository(self._record.full_name)
-        commit = result.get("commit")
-        if isinstance(commit, str) and commit:
-            self._record = replace(self._record, commit_sha=commit)
+        release_tag = result.get("version")
+        if isinstance(release_tag, str) and release_tag:
+            self._record = replace(self._record, release_tag=release_tag)
 
         persistent_notification.async_create(
             self.hass,
@@ -182,51 +151,20 @@ class PrivateHacsRepositoryUpdateEntity(CoordinatorEntity, UpdateEntity):
         )
 
 
-def _short_revision(commit: str) -> str:
-    """Format a Git commit for Home Assistant's version display."""
-    return commit[:12]
-
-
-def _version_with_revision(version: str, commit: str) -> str:
-    """Keep a same-version source update distinguishable to Home Assistant."""
-    return f"{version} ({_short_revision(commit)})"
-
-
-def _manifest_version_label(versions: object) -> str | None:
-    """Return a concise display version for one or more integration manifests."""
-    if not isinstance(versions, dict):
-        return None
-
-    versioned_domains = sorted(
-        (domain, version)
-        for domain, version in versions.items()
-        if isinstance(domain, str) and isinstance(version, str) and version
-    )
-    if not versioned_domains:
-        return None
-
-    versions_only = {version for _, version in versioned_domains}
-    if len(versions_only) == 1:
-        return versioned_domains[0][1]
-    return ", ".join(
-        f"{domain} {version}" for domain, version in versioned_domains
-    )
-
-
-def _manifest_version_marker(available_versions: object) -> str:
-    """Return a distinct update marker when GitHub's commit endpoint failed."""
-    version = _manifest_version_label(available_versions)
-    return f"manifest {version}" if version else "new manifest version"
-
-
 def _update_completion_message(full_name: str, result: dict[str, object]) -> str:
     """Return the appropriate post-update instruction for installed content."""
+    release_tag = result.get("version")
+    release = (
+        f" from GitHub release {release_tag}"
+        if isinstance(release_tag, str) and release_tag
+        else ""
+    )
     if result.get("lovelace_resource"):
         return (
-            f"PrivateHACS updated the Lovelace card {full_name}. "
+            f"PrivateHACS updated the Lovelace card {full_name}{release}. "
             "Reload the dashboard to load the new card code."
         )
     return (
-        f"PrivateHACS installed {full_name}. "
+        f"PrivateHACS installed {full_name}{release}. "
         "Optionally reload configured entries in PrivateHACS, or restart Home Assistant."
     )

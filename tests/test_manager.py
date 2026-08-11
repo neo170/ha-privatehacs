@@ -111,6 +111,12 @@ class _Client:
     async def async_get_integration_versions(self, *_):
         return {"example": "1.1.0"}
 
+    async def async_get_latest_release(self, *_):
+        return types.SimpleNamespace(
+            tag_name="1.1.0",
+            html_url="https://example.test/owner/ha-example/releases/tag/1.1.0",
+        )
+
 
 class _Store:
     def values(self):
@@ -153,6 +159,12 @@ class _InstallClient:
 
     async def async_get_commit_sha(self, *_):
         return "commit-sha"
+
+    async def async_get_latest_release(self, *_):
+        return types.SimpleNamespace(
+            tag_name="1.1.0",
+            html_url="https://example.test/owner/ha-example/releases/tag/1.1.0",
+        )
 
     async def async_download_archive(self, *_):
         return b"archive"
@@ -269,8 +281,9 @@ def test_externally_managed_integration_is_not_advertised_as_updatable(
             "local_versions": {"example": "1.0.0"},
             "available_versions": {"example": "1.1.0"},
             "installed_at": None,
-            "installed_commit": None,
-            "available_commit": None,
+            "installed_version": None,
+            "available_version": "1.1.0",
+            "release_url": "https://example.test/owner/ha-example/releases/tag/1.1.0",
             "update_available": False,
         }
     ]
@@ -295,6 +308,7 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert installer.allowed_existing == set()
     assert store.record is not None
     assert store.record.commit_sha == "commit-sha"
+    assert store.record.release_tag == "1.1.0"
 
 
 def test_reload_keeps_restart_required_when_an_entry_fails(
@@ -496,10 +510,32 @@ def test_lovelace_card_is_installed_and_registered_as_a_module(tmp_path: Path) -
     assert result["lovelace_resource"].startswith(
         "/local/privatehacs/ha-example-"
     )
-    assert result["lovelace_resource"].endswith("/ha-example.js?v=commit-sha")
+    assert result["lovelace_resource"].endswith("/ha-example.js?v=1.1.0")
     assert resources.items == [
         {"id": "resource", "res_type": "module", "url": result["lovelace_resource"]}
     ]
     assert store.record is not None
     assert store.record.lovelace_filename == "ha-example.js"
+    assert store.record.release_tag == "1.1.0"
     assert installer.allow_existing is False
+
+
+def test_legacy_lovelace_installation_is_offered_a_release_update(tmp_path: Path) -> None:
+    """A commit-based card installation is migrated by reinstalling its release."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=(),
+        installed_at="2026-01-01T00:00:00+00:00",
+        lovelace_filename="ha-example.js",
+        lovelace_directory="ha-example-123456789abc",
+    )
+
+    catalog = asyncio.run(
+        PrivateHacsManager(_Hass(tmp_path), _Client(), _ManagedStore(record)).async_get_catalog()
+    )
+
+    assert catalog[0]["installed_version"] is None
+    assert catalog[0]["available_version"] == "1.1.0"
+    assert catalog[0]["update_available"] is True
