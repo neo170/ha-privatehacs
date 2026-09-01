@@ -60,6 +60,39 @@ def test_panel_displays_lovelace_release_tags() -> None:
     assert "repository.available_commit" not in panel_source
 
 
+def test_panel_uses_html_confirmation_dialogs() -> None:
+    """All confirmation flows use the panel's native HTML dialog."""
+    panel_source = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "privatehacs"
+        / "frontend"
+        / "privatehacs-panel.js"
+    ).read_text(encoding="utf-8")
+
+    assert '<dialog class="confirmation-dialog"' in panel_source
+    assert "confirmationDialog.showModal()" in panel_source
+    assert "window" + ".confirm" not in panel_source
+    assert panel_source.count("await this._confirm(") == 4
+
+
+def test_panel_exposes_home_assistant_menu_on_mobile() -> None:
+    """The mobile header can reopen Home Assistant navigation."""
+    panel_source = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "privatehacs"
+        / "frontend"
+        / "privatehacs-panel.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="menu"' in panel_source
+    assert 'icon="mdi:menu"' in panel_source
+    assert ".menu-button {" in panel_source
+    assert "display: inline-flex;" in panel_source
+    assert '"hass-toggle-menu"' in panel_source
+
+
 def test_frontend_module_url_uses_the_asset_content_hash(tmp_path: Path) -> None:
     """Changing the panel asset produces a distinct browser module URL."""
     content = b"customElements.define('privatehacs-panel', class {});"
