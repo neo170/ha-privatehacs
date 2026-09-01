@@ -111,6 +111,20 @@ def test_panel_header_matches_cardbook_header_tokens() -> None:
     assert "@media (max-width: 640px)" in panel_source
 
 
+def test_panel_does_not_register_custom_element_twice() -> None:
+    """Reloading the asset must not redefine the panel custom element."""
+    panel_source = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "privatehacs"
+        / "frontend"
+        / "privatehacs-panel.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'if (!customElements.get("privatehacs-panel")) {' in panel_source
+    assert panel_source.count('customElements.define("privatehacs-panel", PrivateHacsPanel)') == 1
+
+
 def test_frontend_module_url_uses_the_asset_content_hash(tmp_path: Path) -> None:
     """Changing the panel asset produces a distinct browser module URL."""
     content = b"customElements.define('privatehacs-panel', class {});"

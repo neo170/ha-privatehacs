@@ -886,4 +886,6 @@ class PrivateHacsPanel extends HTMLElement {
   }
 }
 
-customElements.define("privatehacs-panel", PrivateHacsPanel);
+if (!customElements.get("privatehacs-panel")) {
+  customElements.define("privatehacs-panel", PrivateHacsPanel);
+}
