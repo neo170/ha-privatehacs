@@ -1,181 +1,92 @@
-[CmdletBinding(SupportsShouldProcess)]
 param(
-    [ValidateSet("Patch", "Minor", "Major")]
-    [string]$Bump = "Patch",
-
-    [ValidatePattern("^\d+\.\d+\.\d+$")]
-    [string]$Version,
-
-    [string]$Repository = "neo170/ha-privatehacs",
-
-    [string]$Branch = "main",
-
-    [switch]$Prerelease
+  [Parameter(Mandatory, Position = 0)]
+  [string]$Description
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Invoke-Tool {
-    param(
-        [Parameter(Mandatory)]
-        [string]$File,
+function Invoke-GitHubCommand {
+  param(
+    [Parameter(Mandatory)][string]$Command,
+    [Parameter(Mandatory)][string[]]$Arguments
+  )
 
-        [string[]]$Arguments = @()
-    )
-
-    & $File @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $File $($Arguments -join ' ')"
-    }
-}
-
-function Get-ToolOutput {
-    param(
-        [Parameter(Mandatory)]
-        [string]$File,
-
-        [string[]]$Arguments = @()
-    )
-
-    $output = & $File @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $File $($Arguments -join ' ')"
-    }
-
-    return ($output | Out-String).Trim()
+  & $Command @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "'$Command $($Arguments -join ' ')' failed with exit code $LASTEXITCODE."
+  }
 }
 
 function Set-Utf8FileContent {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Path,
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)][string]$Content
+  )
 
-        [Parameter(Mandatory)]
-        [string]$Content
-    )
-
-    $encoding = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+  $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Content, $utf8WithoutBom)
 }
 
-function Get-BumpedVersion {
-    param(
-        [Parameter(Mandatory)]
-        [Version]$CurrentVersion,
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$manifestPath = Join-Path $repoRoot "custom_components/privatehacs/manifest.json"
+$projectPath = Join-Path $repoRoot "pyproject.toml"
+$releasePaths = @(
+  "custom_components/privatehacs",
+  "pyproject.toml",
+  "README.md",
+  "hacs.json",
+  "tests",
+  "scripts/Release.ps1"
+)
 
-        [Parameter(Mandatory)]
-        [string]$Kind
-    )
-
-    switch ($Kind) {
-        "Major" { return [Version]::new($CurrentVersion.Major + 1, 0, 0) }
-        "Minor" { return [Version]::new($CurrentVersion.Major, $CurrentVersion.Minor + 1, 0) }
-        default { return [Version]::new($CurrentVersion.Major, $CurrentVersion.Minor, $CurrentVersion.Build + 1) }
-    }
+$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonCommand) {
+  throw "Required command was not found: python"
 }
 
-foreach ($tool in "git", "gh", "py", "node") {
-    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
-        throw "Required command was not found: $tool"
-    }
-}
-
-$repositoryRoot = Get-ToolOutput git @("rev-parse", "--show-toplevel")
-Push-Location $repositoryRoot
+Push-Location $repoRoot
 try {
-    $currentBranch = Get-ToolOutput git @("branch", "--show-current")
-    if ($currentBranch -ne $Branch) {
-        throw "Releases must be created from '$Branch', not '$currentBranch'."
-    }
+  $manifestContent = Get-Content -LiteralPath $manifestPath -Raw
+  $manifest = $manifestContent | ConvertFrom-Json
+  $projectContent = Get-Content -LiteralPath $projectPath -Raw
+  $projectVersionMatch = [regex]::Match($projectContent, '(?m)^version = "(?<version>[^"]+)"\s*$')
+  if (-not $projectVersionMatch.Success -or $manifest.version -ne $projectVersionMatch.Groups["version"].Value) {
+    throw "manifest.json and pyproject.toml do not have the same version."
+  }
 
-    $manifestPath = Join-Path $repositoryRoot "custom_components/privatehacs/manifest.json"
-    $projectPath = Join-Path $repositoryRoot "pyproject.toml"
-    $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
-    $projectContent = Get-Content -Raw $projectPath
-    $projectVersionMatch = [regex]::Match($projectContent, '(?m)^version = "(?<version>[^"]+)"\s*$')
-    if (-not $projectVersionMatch.Success -or $manifest.version -ne $projectVersionMatch.Groups["version"].Value) {
-        throw "manifest.json and pyproject.toml do not have the same version."
-    }
+  $currentVersion = [Version]$manifest.version
+  $newVersion = "{0}.{1}.{2}" -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Build + 1)
+  $tag = "v$newVersion"
 
-    $currentVersion = [Version]$manifest.version
-    $releaseVersion = if ($Version) { [Version]$Version } else { Get-BumpedVersion $currentVersion $Bump }
-    if ($releaseVersion -le $currentVersion) {
-        throw "The release version ($releaseVersion) must be greater than the current version ($currentVersion)."
-    }
+  $updatedManifestContent = [regex]::Replace(
+    $manifestContent,
+    '"version"\s*:\s*"[^"]+"',
+    '"version": "' + $newVersion + '"',
+    1
+  )
+  Set-Utf8FileContent $manifestPath $updatedManifestContent
 
-    $tag = "v$releaseVersion"
-    if ($WhatIfPreference) {
-        Write-Host "WhatIf: would create $tag from $Branch and include all non-ignored changes in its commit."
-        Invoke-Tool py @("-3", "-m", "pytest")
-        Invoke-Tool node @("--check", "custom_components/privatehacs/frontend/privatehacs-panel.js")
-        Invoke-Tool git @("diff", "--check")
-        return
-    }
+  $updatedProjectContent = [regex]::Replace(
+    $projectContent,
+    '(?m)^version = "[^"]+"\s*$',
+    'version = "' + $newVersion + '"',
+    1
+  )
+  Set-Utf8FileContent $projectPath $updatedProjectContent
 
-    Invoke-Tool gh @("auth", "status")
-    Invoke-Tool git @("fetch", "origin", $Branch, "--tags")
-    $aheadBehind = (Get-ToolOutput git @("rev-list", "--left-right", "--count", "HEAD...origin/$Branch")) -split "\s+"
-    if ($aheadBehind.Count -ne 2 -or $aheadBehind[1] -ne "0") {
-        throw "origin/$Branch contains commits that are not in the local branch. Pull and resolve them before releasing."
-    }
+  Invoke-GitHubCommand $pythonCommand.Source @("-m", "pytest")
+  Invoke-GitHubCommand "node" @("--check", "custom_components/privatehacs/frontend/privatehacs-panel.js")
+  Invoke-GitHubCommand "git" @("diff", "--check")
 
-    & git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
-    if ($LASTEXITCODE -eq 0) {
-        throw "The tag $tag already exists on origin."
-    }
-    if ($LASTEXITCODE -ne 2) {
-        throw "Could not verify whether $tag already exists on origin."
-    }
+  Invoke-GitHubCommand "git" (@("add", "-A", "--") + $releasePaths)
+  Invoke-GitHubCommand "git" @("commit", "-m", "$tag`: $Description")
+  Invoke-GitHubCommand "git" @("tag", "-a", $tag, "-m", "$tag`: $Description")
+  Invoke-GitHubCommand "git" @("push", "origin", "main")
+  Invoke-GitHubCommand "git" @("push", "origin", $tag)
+  Invoke-GitHubCommand "gh" @("release", "create", $tag, "--repo", "neo170/ha-privatehacs", "--title", $tag, "--notes", $Description, "--verify-tag")
 
-    $manifestContent = Get-Content -Raw $manifestPath
-    $manifestContent = [regex]::Replace(
-        $manifestContent,
-        '"version"\s*:\s*"[^"]+"',
-        '"version": "' + $releaseVersion + '"',
-        1
-    )
-    Set-Utf8FileContent $manifestPath $manifestContent
-
-    $projectContent = [regex]::Replace(
-        $projectContent,
-        '(?m)^version = "[^"]+"\s*$',
-        'version = "' + $releaseVersion + '"',
-        1
-    )
-    Set-Utf8FileContent $projectPath $projectContent
-
-    Invoke-Tool py @("-3", "-m", "pytest")
-    Invoke-Tool node @("--check", "custom_components/privatehacs/frontend/privatehacs-panel.js")
-    Invoke-Tool git @("diff", "--check")
-
-    Invoke-Tool git @("add", "--all")
-    & git diff --cached --quiet
-    if ($LASTEXITCODE -eq 0) {
-        throw "There are no changes to release."
-    }
-    if ($LASTEXITCODE -ne 1) {
-        throw "Could not inspect staged changes."
-    }
-
-    Invoke-Tool git @("commit", "-m", "Release $tag")
-    Invoke-Tool git @("push", "origin", $Branch)
-
-    $commit = Get-ToolOutput git @("rev-parse", "HEAD")
-    $releaseArguments = @(
-        "release", "create", $tag,
-        "--repo", $Repository,
-        "--target", $commit,
-        "--title", $tag,
-        "--generate-notes"
-    )
-    if ($Prerelease) {
-        $releaseArguments += "--prerelease"
-    }
-    Invoke-Tool gh $releaseArguments
-
-    Write-Host "Published $tag from $commit."
-}
-finally {
-    Pop-Location
+  Write-Host "Release $tag was published successfully."
+} finally {
+  Pop-Location
 }

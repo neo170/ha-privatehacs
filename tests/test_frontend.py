@@ -93,6 +93,24 @@ def test_panel_exposes_home_assistant_menu_on_mobile() -> None:
     assert '"hass-toggle-menu"' in panel_source
 
 
+def test_panel_header_matches_cardbook_header_tokens() -> None:
+    """The panel header uses the same Home Assistant header tokens as CardBook."""
+    panel_source = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "privatehacs"
+        / "frontend"
+        / "privatehacs-panel.js"
+    ).read_text(encoding="utf-8")
+
+    assert "height: var(--header-height);" in panel_source
+    assert "background: var(--app-header-background-color);" in panel_source
+    assert "color: var(--app-header-text-color);" in panel_source
+    assert "border-bottom: var(--app-header-border-bottom);" in panel_source
+    assert "font-size: var(--app-header-font-size, var(--ha-font-size-xl));" in panel_source
+    assert "@media (max-width: 640px)" in panel_source
+
+
 def test_frontend_module_url_uses_the_asset_content_hash(tmp_path: Path) -> None:
     """Changing the panel asset produces a distinct browser module URL."""
     content = b"customElements.define('privatehacs-panel', class {});"

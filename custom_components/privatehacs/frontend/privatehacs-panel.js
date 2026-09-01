@@ -460,54 +460,49 @@ class PrivateHacsPanel extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          color: var(--primary-text-color);
           display: block;
-          min-height: 100%;
+          height: 100%;
+          background: var(--primary-background-color, #f5f5f5);
+          font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
+          font-size: 14px;
+          color: var(--primary-text-color, #212121);
         }
         main {
           min-height: 100%;
         }
         header {
-          align-items: center;
-          background: var(--primary-background-color, var(--card-background-color));
-          border-bottom: 1px solid var(--divider-color);
-          box-sizing: border-box;
-          color: var(--primary-text-color);
           display: flex;
-          height: 56px;
-          justify-content: space-between;
-          min-height: 56px;
-          padding: 0 24px;
+          align-items: center;
+          height: var(--header-height);
+          background: var(--app-header-background-color);
+          color: var(--app-header-text-color);
+          border-bottom: var(--app-header-border-bottom);
+          padding: 0;
+          flex-shrink: 0;
+          position: relative;
         }
-        .header-start {
-          align-items: center;
-          display: flex;
-          gap: 8px;
-          min-width: 0;
+        header ha-icon-button {
+          color: var(--app-header-text-color);
+          --mdc-icon-button-size: var(--header-height);
         }
         .menu-button {
           display: none;
         }
         .topbar-title {
-          align-items: center;
           display: flex;
-          font-size: 20px;
-          font-weight: 500;
-          gap: 12px;
+          align-items: center;
+          justify-content: center;
+          flex: 1;
           min-width: 0;
-        }
-        .topbar-title ha-icon {
-          --mdi-icon-size: 24px;
-          flex: 0 0 auto;
-        }
-        .topbar-title span {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          height: var(--header-height);
+          font-size: var(--app-header-font-size, var(--ha-font-size-xl));
+          font-weight: var(--ha-font-weight-normal);
+          line-height: var(--header-height);
+          gap: var(--ha-space-1, 4px);
         }
         .header-actions {
-          align-items: center;
           display: flex;
+          align-items: center;
         }
         .search-toolbar {
           padding: 14px 0;
@@ -750,12 +745,7 @@ class PrivateHacsPanel extends HTMLElement {
           background: color-mix(in srgb, var(--primary-color) 86%, #000);
           color: var(--text-primary-color, #fff);
         }
-        @media (max-width: 600px) {
-          header {
-            height: 56px;
-            min-height: 56px;
-            padding: 0 8px 0 16px;
-          }
+        @media (max-width: 640px) {
           .search-toolbar {
             padding: 12px 0;
           }
@@ -782,14 +772,12 @@ class PrivateHacsPanel extends HTMLElement {
       </style>
       <main>
         <header>
-          <div class="header-start">
-            <ha-icon-button class="menu-button" id="menu" label="${labels.openMenu}">
-              <ha-icon icon="mdi:menu"></ha-icon>
-            </ha-icon-button>
-            <div class="topbar-title">
-              <ha-icon icon="mdi:github"></ha-icon>
-              <span>${labels.title}</span>
-            </div>
+          <ha-icon-button class="menu-button" id="menu" label="${labels.openMenu}">
+            <ha-icon icon="mdi:menu"></ha-icon>
+          </ha-icon-button>
+          <div class="topbar-title">
+            <ha-icon icon="mdi:github"></ha-icon>
+            <span>${labels.title}</span>
           </div>
           <div class="header-actions">
             <ha-icon-button id="refresh" label="${labels.refresh}">
