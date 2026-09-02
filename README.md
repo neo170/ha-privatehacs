@@ -146,17 +146,12 @@ dependencies in a dedicated development environment.
 ## Release
 
 Create the next patch release, including the commit, push, GitHub tag, and
-generated GitHub release notes, with one command:
+generated GitHub release notes, with one command and a mandatory description:
 
 ```powershell
-.\scripts\Release.ps1
+.\scripts\Release.ps1 "Description of the changes"
 ```
 
-The script updates the version in `manifest.json` and `pyproject.toml`, runs the
-test suite and panel syntax check, and then stages all non-ignored working-tree
-changes in its release commit. It only releases from an up-to-date local `main`
-branch and requires authenticated `git`, GitHub CLI (`gh`), Python, and Node.js.
-
-Use `-Bump Minor`, `-Bump Major`, or `-Version 1.2.3` to select another version.
-Use `-Prerelease` to create a GitHub prerelease. Run `-WhatIf` to validate the
-working tree without changing files, Git, or GitHub.
+The script updates the version in `manifest.json` and `pyproject.toml`, then
+commits and pushes the release tag and creates the GitHub release. It requires
+authenticated `git` and GitHub CLI (`gh`).

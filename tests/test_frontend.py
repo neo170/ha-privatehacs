@@ -76,6 +76,27 @@ def test_panel_uses_html_confirmation_dialogs() -> None:
     assert panel_source.count("await this._confirm(") == 4
 
 
+def test_panel_confirmation_dialog_matches_cardbook_style() -> None:
+    """The confirmation dialog follows CardBook's popup styling tokens."""
+    panel_source = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "privatehacs"
+        / "frontend"
+        / "privatehacs-panel.js"
+    ).read_text(encoding="utf-8")
+
+    assert "width: 90%;" in panel_source
+    assert "max-width: 380px;" in panel_source
+    assert "padding: 24px 28px;" in panel_source
+    assert "border-radius: 10px;" in panel_source
+    assert "box-shadow: 0 6px 28px rgb(0 0 0 / 35%);" in panel_source
+    assert "background: rgb(0 0 0 / 50%);" in panel_source
+    assert "background: var(--secondary-background-color, #e0e0e0);" in panel_source
+    assert 'class="button button--secondary"' in panel_source
+    assert ".confirmation-dialog__header" not in panel_source
+
+
 def test_panel_exposes_home_assistant_menu_on_mobile() -> None:
     """The mobile header can reopen Home Assistant navigation."""
     panel_source = (

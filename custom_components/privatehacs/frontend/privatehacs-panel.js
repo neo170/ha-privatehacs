@@ -31,7 +31,6 @@ class PrivateHacsPanel extends HTMLElement {
       ? {
           title: "PrivateHACS",
           openMenu: "Menü öffnen",
-          confirmationTitle: "Bestätigung",
           confirm: "Fortfahren",
           cancel: "Abbrechen",
           refresh: "Repository-Liste aktualisieren",
@@ -73,7 +72,6 @@ class PrivateHacsPanel extends HTMLElement {
       : {
           title: "PrivateHACS",
           openMenu: "Open menu",
-          confirmationTitle: "Confirmation",
           confirm: "Continue",
           cancel: "Cancel",
           refresh: "Refresh repository list",
@@ -678,72 +676,59 @@ class PrivateHacsPanel extends HTMLElement {
           right: auto;
           bottom: auto;
           left: 50%;
-          width: min(480px, calc(100vw - 32px));
-          max-height: min(640px, calc(100vh - 32px));
+          box-sizing: border-box;
+          width: 90%;
+          max-width: 380px;
+          max-height: calc(100vh - 40px);
           margin: 0;
-          padding: 0;
+          padding: 24px 28px;
           overflow: auto;
           border: 0;
-          border-radius: 8px;
-          background: var(--card-background-color);
-          color: var(--primary-text-color);
-          box-shadow: 0 20px 48px rgb(0 0 0 / 30%);
+          border-radius: 10px;
+          background: var(--card-background-color, #fff);
+          color: var(--primary-text-color, #212121);
+          box-shadow: 0 6px 28px rgb(0 0 0 / 35%);
           transform: translate(-50%, -50%);
         }
         .confirmation-dialog::backdrop {
-          background: rgb(0 0 0 / 38%);
-        }
-        .confirmation-dialog__header {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 22px 24px 12px;
-          background: #3c3f44;
-          color: #f1f1f1;
-        }
-        .confirmation-dialog__eyebrow {
-          margin: 0;
-          color: #d9d9d9;
-          font-size: 13px;
-        }
-        .confirmation-dialog h2 {
-          margin: 5px 0 0;
-          font-size: 20px;
-          line-height: 1.2;
+          background: rgb(0 0 0 / 50%);
         }
         .confirmation-dialog__message {
-          margin: 0;
-          padding: 20px 24px 22px;
-          line-height: 1.45;
+          margin: 0 0 20px;
+          font-size: 15px;
+          line-height: 1.5;
           overflow-wrap: anywhere;
         }
         .confirmation-dialog__actions {
           display: flex;
           justify-content: flex-end;
           gap: 8px;
-          padding: 12px 16px;
-          border-top: 1px solid var(--divider-color);
-          background: color-mix(in srgb, var(--primary-color) 4%, var(--card-background-color));
         }
         .confirmation-dialog__actions .button {
-          background: transparent;
-          border: 1px solid transparent;
-          color: var(--primary-text-color);
+          border: 0;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
           font-weight: 500;
+          min-height: 0;
+          padding: 7px 16px;
+          transition: filter .15s;
         }
         .confirmation-dialog__actions .button--primary {
-          background: var(--primary-color);
-          color: var(--text-primary-color, #fff);
+          background: var(--primary-color, #03a9f4);
+          color: #fff;
+        }
+        .confirmation-dialog__actions .button--secondary {
+          background: var(--secondary-background-color, #e0e0e0);
+          color: var(--primary-text-color, #212121);
         }
         .confirmation-dialog__actions .button:hover:not(:disabled),
         .confirmation-dialog__actions .button:focus-visible {
-          background: color-mix(in srgb, var(--primary-color) 11%, transparent);
-          color: var(--primary-color);
+          filter: brightness(.9);
         }
-        .confirmation-dialog__actions .button--primary:hover:not(:disabled),
-        .confirmation-dialog__actions .button--primary:focus-visible {
-          background: color-mix(in srgb, var(--primary-color) 86%, #000);
-          color: var(--text-primary-color, #fff);
+        .confirmation-dialog__actions .button:disabled {
+          cursor: default;
+          opacity: .5;
         }
         @media (max-width: 640px) {
           .search-toolbar {
@@ -799,17 +784,11 @@ class PrivateHacsPanel extends HTMLElement {
           <section class="catalog" id="catalog"></section>
         </div>
       </main>
-      <dialog class="confirmation-dialog" id="confirmation-dialog" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
-        <div class="confirmation-dialog__header">
-          <div>
-            <p class="confirmation-dialog__eyebrow">${labels.title}</p>
-            <h2 id="confirmation-title">${labels.confirmationTitle}</h2>
-          </div>
-        </div>
+      <dialog class="confirmation-dialog" id="confirmation-dialog" aria-label="${labels.title}" aria-describedby="confirmation-message">
         <p class="confirmation-dialog__message" id="confirmation-message"></p>
         <footer class="confirmation-dialog__actions">
-          <button class="button" id="confirmation-cancel" type="button">${labels.cancel}</button>
           <button class="button button--primary" id="confirmation-confirm" type="button">${labels.confirm}</button>
+          <button class="button button--secondary" id="confirmation-cancel" type="button">${labels.cancel}</button>
         </footer>
       </dialog>`;
 
