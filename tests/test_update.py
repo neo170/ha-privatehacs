@@ -95,6 +95,7 @@ def _load_update_module():
     helpers.update_coordinator = update_coordinator
     helpers.dispatcher = dispatcher
     dispatcher.async_dispatcher_connect = async_dispatcher_connect
+    dispatcher.async_dispatcher_send = lambda *_: None
     manager = types.ModuleType(f"{package_name}.manager")
     manager.PrivateHacsManager = object
     sys.modules.update(
@@ -169,12 +170,10 @@ class _SetupHass:
             }
         }
         self.dispatcher_callbacks: dict[str, list] = {}
-        self.tasks = []
+        self.coroutines = []
 
-    def async_create_task(self, coroutine):
-        task = asyncio.create_task(coroutine)
-        self.tasks.append(task)
-        return task
+    def create_task(self, coroutine):
+        self.coroutines.append(coroutine)
 
 
 class _SetupEntry:
@@ -199,8 +198,8 @@ def test_repository_change_refreshes_update_entities() -> None:
         callback = hass.dispatcher_callbacks[
             update_module.SIGNAL_REPOSITORIES_CHANGED
         ][0]
-        callback()
-        await asyncio.gather(*hass.tasks)
+        await asyncio.to_thread(callback)
+        await asyncio.gather(*hass.coroutines)
 
     asyncio.run(run())
 

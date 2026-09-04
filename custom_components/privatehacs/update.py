@@ -41,7 +41,7 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     def refresh_update_entities() -> None:
-        hass.async_create_task(coordinator.async_request_refresh())
+        hass.create_task(coordinator.async_request_refresh())
 
     entry.async_on_unload(
         async_dispatcher_connect(
