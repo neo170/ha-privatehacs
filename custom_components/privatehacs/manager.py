@@ -15,8 +15,9 @@ from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
 from homeassistant import loader
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DOMAIN, PANEL_ICON_URL_PATH
+from .const import DOMAIN, PANEL_ICON_URL_PATH, SIGNAL_REPOSITORIES_CHANGED
 from .github import GitHubClient, GitHubError
 from .installer import ArchiveInstaller, InstallationError
 from .models import GitHubRepository, InstalledRepository
@@ -229,6 +230,7 @@ class PrivateHacsManager:
                     self._hass, directory_name, resource_url
                 )
                 self._catalog = None
+                async_dispatcher_send(self._hass, SIGNAL_REPOSITORIES_CHANGED)
                 return {
                     "full_name": record.full_name,
                     "domains": [],
@@ -280,6 +282,7 @@ class PrivateHacsManager:
             await loader.async_get_custom_components(self._hass)
             self._restart_required_repositories.add(record.full_name)
             self._catalog = None
+            async_dispatcher_send(self._hass, SIGNAL_REPOSITORIES_CHANGED)
 
             return {
                 "full_name": record.full_name,
@@ -360,6 +363,7 @@ class PrivateHacsManager:
 
             await self._store.async_remove(full_name)
             self._catalog = None
+            async_dispatcher_send(self._hass, SIGNAL_REPOSITORIES_CHANGED)
             return {
                 "full_name": full_name,
                 "lovelace_resource_removed": resource_removed,

@@ -10,7 +10,6 @@ class PrivateHacsPanel extends HTMLElement {
     this._search = "";
     this._restarting = false;
     this._restartRequired = false;
-    this._confirmation = null;
   }
 
   set hass(value) {
@@ -30,9 +29,6 @@ class PrivateHacsPanel extends HTMLElement {
     return german
       ? {
           title: "PrivateHACS",
-          openMenu: "Menü öffnen",
-          confirm: "Fortfahren",
-          cancel: "Abbrechen",
           refresh: "Repository-Liste aktualisieren",
           restartHomeAssistant: "Home Assistant neu starten",
           restartConfirmation: "Home Assistant wirklich neu starten?",
@@ -71,9 +67,6 @@ class PrivateHacsPanel extends HTMLElement {
         }
       : {
           title: "PrivateHACS",
-          openMenu: "Open menu",
-          confirm: "Continue",
-          cancel: "Cancel",
           refresh: "Refresh repository list",
           restartHomeAssistant: "Restart Home Assistant",
           restartConfirmation: "Restart Home Assistant now?",
@@ -112,30 +105,6 @@ class PrivateHacsPanel extends HTMLElement {
         };
   }
 
-  _confirm(message) {
-    return new Promise((resolve) => {
-      if (this._confirmation) {
-        this._confirmation.resolve(false);
-      }
-      this._confirmation = { message, resolve };
-      this._render();
-    });
-  }
-
-  _resolveConfirmation(confirmed) {
-    const confirmation = this._confirmation;
-    if (!confirmation) {
-      return;
-    }
-    this._confirmation = null;
-    const dialog = this.shadowRoot.querySelector("#confirmation-dialog");
-    if (dialog?.open) {
-      dialog.close();
-    }
-    confirmation.resolve(confirmed);
-    this._render();
-  }
-
   async _loadRepositories(forceRefresh = false) {
     if (!this._hass) {
       return;
@@ -161,7 +130,7 @@ class PrivateHacsPanel extends HTMLElement {
 
   async _install(repository, takeOver = false) {
     const labels = this._labels();
-    if (takeOver && !await this._confirm(labels.takeOverConfirmation)) {
+    if (takeOver && !window.confirm(labels.takeOverConfirmation)) {
       return;
     }
 
@@ -196,7 +165,7 @@ class PrivateHacsPanel extends HTMLElement {
 
   async _uninstall(repository) {
     const labels = this._labels();
-    if (!await this._confirm(labels.uninstallConfirmation)) {
+    if (!window.confirm(labels.uninstallConfirmation)) {
       return;
     }
 
@@ -226,7 +195,7 @@ class PrivateHacsPanel extends HTMLElement {
 
   async _reload(repository) {
     const labels = this._labels();
-    if (!await this._confirm(labels.reloadConfirmation)) {
+    if (!window.confirm(labels.reloadConfirmation)) {
       return;
     }
 
@@ -268,7 +237,7 @@ class PrivateHacsPanel extends HTMLElement {
 
   async _restartHomeAssistant() {
     const labels = this._labels();
-    if (!await this._confirm(labels.restartConfirmation)) {
+    if (!window.confirm(labels.restartConfirmation)) {
       return;
     }
 
@@ -458,49 +427,45 @@ class PrivateHacsPanel extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
+          color: var(--primary-text-color);
           display: block;
-          height: 100%;
-          background: var(--primary-background-color, #f5f5f5);
-          font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif);
-          font-size: 14px;
-          color: var(--primary-text-color, #212121);
+          min-height: 100%;
         }
         main {
           min-height: 100%;
         }
         header {
-          display: flex;
           align-items: center;
-          height: var(--header-height);
-          background: var(--app-header-background-color);
-          color: var(--app-header-text-color);
-          border-bottom: var(--app-header-border-bottom);
-          padding: 0;
-          flex-shrink: 0;
-          position: relative;
-        }
-        header ha-icon-button {
-          color: var(--app-header-text-color);
-          --mdc-icon-button-size: var(--header-height);
-        }
-        .menu-button {
-          display: none;
+          background: var(--primary-background-color, var(--card-background-color));
+          border-bottom: 1px solid var(--divider-color);
+          box-sizing: border-box;
+          color: var(--primary-text-color);
+          display: flex;
+          height: 56px;
+          justify-content: space-between;
+          min-height: 56px;
+          padding: 0 24px;
         }
         .topbar-title {
-          display: flex;
           align-items: center;
-          justify-content: center;
-          flex: 1;
+          display: flex;
+          font-size: 20px;
+          font-weight: 500;
+          gap: 12px;
           min-width: 0;
-          height: var(--header-height);
-          font-size: var(--app-header-font-size, var(--ha-font-size-xl));
-          font-weight: var(--ha-font-weight-normal);
-          line-height: var(--header-height);
-          gap: var(--ha-space-1, 4px);
+        }
+        .topbar-title ha-icon {
+          --mdi-icon-size: 24px;
+          flex: 0 0 auto;
+        }
+        .topbar-title span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .header-actions {
-          display: flex;
           align-items: center;
+          display: flex;
         }
         .search-toolbar {
           padding: 14px 0;
@@ -670,75 +635,17 @@ class PrivateHacsPanel extends HTMLElement {
         .error {
           border-color: var(--error-color);
         }
-        .confirmation-dialog {
-          position: fixed;
-          top: 50%;
-          right: auto;
-          bottom: auto;
-          left: 50%;
-          box-sizing: border-box;
-          width: 90%;
-          max-width: 380px;
-          max-height: calc(100vh - 40px);
-          margin: 0;
-          padding: 24px 28px;
-          overflow: auto;
-          border: 0;
-          border-radius: 10px;
-          background: var(--card-background-color, #fff);
-          color: var(--primary-text-color, #212121);
-          box-shadow: 0 6px 28px rgb(0 0 0 / 35%);
-          transform: translate(-50%, -50%);
-        }
-        .confirmation-dialog::backdrop {
-          background: rgb(0 0 0 / 50%);
-        }
-        .confirmation-dialog__message {
-          margin: 0 0 20px;
-          font-size: 15px;
-          line-height: 1.5;
-          overflow-wrap: anywhere;
-        }
-        .confirmation-dialog__actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-        .confirmation-dialog__actions .button {
-          border: 0;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          min-height: 0;
-          padding: 7px 16px;
-          transition: filter .15s;
-        }
-        .confirmation-dialog__actions .button--primary {
-          background: var(--primary-color, #03a9f4);
-          color: #fff;
-        }
-        .confirmation-dialog__actions .button--secondary {
-          background: var(--secondary-background-color, #e0e0e0);
-          color: var(--primary-text-color, #212121);
-        }
-        .confirmation-dialog__actions .button:hover:not(:disabled),
-        .confirmation-dialog__actions .button:focus-visible {
-          filter: brightness(.9);
-        }
-        .confirmation-dialog__actions .button:disabled {
-          cursor: default;
-          opacity: .5;
-        }
-        @media (max-width: 640px) {
+        @media (max-width: 600px) {
+          header {
+            height: 56px;
+            min-height: 56px;
+            padding: 0 8px 0 16px;
+          }
           .search-toolbar {
             padding: 12px 0;
           }
           .content {
             padding: 0 14px 36px;
-          }
-          .menu-button {
-            display: inline-flex;
           }
           .repository {
             align-items: stretch;
@@ -757,9 +664,6 @@ class PrivateHacsPanel extends HTMLElement {
       </style>
       <main>
         <header>
-          <ha-icon-button class="menu-button" id="menu" label="${labels.openMenu}">
-            <ha-icon icon="mdi:menu"></ha-icon>
-          </ha-icon-button>
           <div class="topbar-title">
             <ha-icon icon="mdi:github"></ha-icon>
             <span>${labels.title}</span>
@@ -783,36 +687,9 @@ class PrivateHacsPanel extends HTMLElement {
           <div id="feedback"></div>
           <section class="catalog" id="catalog"></section>
         </div>
-      </main>
-      <dialog class="confirmation-dialog" id="confirmation-dialog" aria-label="${labels.title}" aria-describedby="confirmation-message">
-        <p class="confirmation-dialog__message" id="confirmation-message"></p>
-        <footer class="confirmation-dialog__actions">
-          <button class="button button--primary" id="confirmation-confirm" type="button">${labels.confirm}</button>
-          <button class="button button--secondary" id="confirmation-cancel" type="button">${labels.cancel}</button>
-        </footer>
-      </dialog>`;
-
-    const confirmationDialog = this.shadowRoot.querySelector("#confirmation-dialog");
-    const confirmationMessage = this.shadowRoot.querySelector("#confirmation-message");
-    const confirmationCancel = this.shadowRoot.querySelector("#confirmation-cancel");
-    const confirmationConfirm = this.shadowRoot.querySelector("#confirmation-confirm");
-    confirmationCancel.addEventListener("click", () => this._resolveConfirmation(false));
-    confirmationConfirm.addEventListener("click", () => this._resolveConfirmation(true));
-    confirmationDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      this._resolveConfirmation(false);
-    });
-    if (this._confirmation) {
-      confirmationMessage.textContent = this._confirmation.message;
-      confirmationDialog.showModal();
-      confirmationConfirm.focus();
-    }
+      </main>`;
 
     const refresh = this.shadowRoot.querySelector("#refresh");
-    const menu = this.shadowRoot.querySelector("#menu");
-    menu.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
-    });
     refresh.disabled = this._loading || this._restarting;
     refresh.addEventListener("click", () => {
       this._loadRepositories(true);
@@ -865,6 +742,4 @@ class PrivateHacsPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("privatehacs-panel")) {
-  customElements.define("privatehacs-panel", PrivateHacsPanel);
-}
+customElements.define("privatehacs-panel", PrivateHacsPanel);

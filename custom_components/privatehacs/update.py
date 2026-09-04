@@ -12,10 +12,11 @@ from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
-from .const import DATA_RUNTIMES, DOMAIN
+from .const import DATA_RUNTIMES, DOMAIN, SIGNAL_REPOSITORIES_CHANGED
 from .manager import PrivateHacsManager
 from .models import InstalledRepository
 
@@ -38,6 +39,15 @@ async def async_setup_entry(
         update_interval=SCAN_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
+
+    def refresh_update_entities() -> None:
+        hass.async_create_task(coordinator.async_request_refresh())
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_REPOSITORIES_CHANGED, refresh_update_entities
+        )
+    )
     async_add_entities(
         PrivateHacsRepositoryUpdateEntity(entry.entry_id, manager, coordinator, record)
         for record in manager.installed_repositories

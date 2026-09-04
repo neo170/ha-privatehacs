@@ -15,6 +15,7 @@ GITHUB_API_VERSION = "2022-11-28"
 DATA_RUNTIMES = "runtimes"
 DATA_WEBSOCKET_REGISTERED = "websocket_registered"
 DATA_PANEL_STATIC_REGISTERED = "panel_static_registered"
+SIGNAL_REPOSITORIES_CHANGED = f"{DOMAIN}_repositories_changed"
 
 PANEL_URL_PATH = DOMAIN
 PANEL_COMPONENT_NAME = "privatehacs-panel"

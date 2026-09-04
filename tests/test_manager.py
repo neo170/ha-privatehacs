@@ -15,9 +15,15 @@ def _load_manager_module():
     core = types.ModuleType("homeassistant.core")
     core.HomeAssistant = object
     homeassistant.loader = types.ModuleType("homeassistant.loader")
+    helpers = types.ModuleType("homeassistant.helpers")
+    dispatcher = types.ModuleType("homeassistant.helpers.dispatcher")
+    dispatcher.async_dispatcher_send = lambda *_: None
+    helpers.dispatcher = dispatcher
     sys.modules.setdefault("homeassistant", homeassistant)
     sys.modules.setdefault("homeassistant.core", core)
     sys.modules.setdefault("homeassistant.loader", homeassistant.loader)
+    sys.modules.setdefault("homeassistant.helpers", helpers)
+    sys.modules.setdefault("homeassistant.helpers.dispatcher", dispatcher)
 
     root = Path(__file__).parents[1] / "custom_components" / "privatehacs"
     package_name = "privatehacs_manager_test"
@@ -307,6 +313,8 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
 
     manager_module.loader.DATA_CUSTOM_COMPONENTS = "custom_components"
     manager_module.loader.async_get_custom_components = async_get_custom_components
+    notifications: list[str] = []
+    manager_module.async_dispatcher_send = lambda _, signal: notifications.append(signal)
     store = _InstallStore()
     manager = PrivateHacsManager(_Hass(tmp_path), _InstallClient(), store)
     installer = _Installer(tmp_path / "custom_components")
@@ -320,6 +328,7 @@ def test_newly_installed_integration_requires_a_restart(tmp_path: Path) -> None:
     assert store.record is not None
     assert store.record.commit_sha == "commit-sha"
     assert store.record.release_tag == "1.1.0"
+    assert notifications == [manager_module.SIGNAL_REPOSITORIES_CHANGED]
 
 
 def test_reload_keeps_restart_required_when_an_entry_fails(
