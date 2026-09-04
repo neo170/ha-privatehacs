@@ -100,6 +100,7 @@ class _ConfigEntries:
 class _Client:
     def __init__(self) -> None:
         self.repository_list_requests = 0
+        self.commit_requests = 0
 
     async def async_list_private_repositories(self):
         self.repository_list_requests += 1
@@ -124,6 +125,7 @@ class _Client:
         )
 
     async def async_get_commit_sha(self, *_):
+        self.commit_requests += 1
         return "commit-sha"
 
 
@@ -203,12 +205,17 @@ class _InstallStore(_Store):
 class _ManagedStore(_Store):
     def __init__(self, record) -> None:
         self.record = record
+        self.upsert_requests = 0
 
     def get(self, full_name: str):
         return self.record if self.record and self.record.full_name == full_name else None
 
     def values(self):
         return (self.record,) if self.record else ()
+
+    async def async_upsert(self, record) -> None:
+        self.upsert_requests += 1
+        self.record = record
 
     async def async_remove(self, full_name: str) -> bool:
         if self.get(full_name) is None:
@@ -571,7 +578,7 @@ def test_legacy_lovelace_installation_matching_the_release_is_current(
 
 
 def test_legacy_component_matching_the_release_is_current(tmp_path: Path) -> None:
-    """Matching manifest versions migrate old component records without an update."""
+    """Matching manifest versions migrate old component records once."""
     manifest_path = tmp_path / "custom_components" / "example" / "manifest.json"
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_text(
@@ -585,17 +592,33 @@ def test_legacy_component_matching_the_release_is_current(tmp_path: Path) -> Non
         installed_at="2026-01-01T00:00:00+00:00",
     )
 
-    catalog = asyncio.run(
-        PrivateHacsManager(_Hass(tmp_path), _Client(), _ManagedStore(record)).async_get_catalog()
-    )
+    client = _Client()
+    store = _ManagedStore(record)
+    manager = PrivateHacsManager(_Hass(tmp_path), client, store)
+
+    async def get_catalogs():
+        first = await manager.async_get_catalog()
+        second = await manager.async_get_catalog(force_refresh=True)
+        return first, second
+
+    catalog, refreshed_catalog = asyncio.run(get_catalogs())
 
     assert catalog[0]["installed_version"] == "1.1.0"
+    assert refreshed_catalog[0]["installed_version"] == "1.1.0"
     assert catalog[0]["available_version"] == "1.1.0"
     assert catalog[0]["update_available"] is False
+    assert store.record.release_tag == "1.1.0"
+    assert store.upsert_requests == 1
+    assert client.commit_requests == 0
 
 
 def test_legacy_component_matching_release_commit_is_current(tmp_path: Path) -> None:
-    """The installed commit identifies a release when manifest lookup is unavailable."""
+    """Local managed domains remain versioned when remote manifest lookup fails."""
+    manifest_path = tmp_path / "custom_components" / "example" / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({"domain": "example", "version": "1.1.0"}), encoding="utf-8"
+    )
     record = InstalledRepository(
         full_name="owner/ha-example",
         default_branch="main",
@@ -604,14 +627,23 @@ def test_legacy_component_matching_release_commit_is_current(tmp_path: Path) -> 
         installed_at="2026-01-01T00:00:00+00:00",
     )
 
-    catalog = asyncio.run(
-        PrivateHacsManager(
-            _Hass(tmp_path), _UnavailableManifestClient(), _ManagedStore(record)
-        ).async_get_catalog()
-    )
+    client = _UnavailableManifestClient()
+    store = _ManagedStore(record)
+    manager = PrivateHacsManager(_Hass(tmp_path), client, store)
 
-    assert catalog[0]["local_versions"] == {}
+    async def get_catalogs():
+        first = await manager.async_get_catalog()
+        second = await manager.async_get_catalog(force_refresh=True)
+        return first, second
+
+    catalog, refreshed_catalog = asyncio.run(get_catalogs())
+
+    assert catalog[0]["local_versions"] == {"example": "1.1.0"}
+    assert refreshed_catalog[0]["local_versions"] == {"example": "1.1.0"}
     assert catalog[0]["available_versions"] == {}
     assert catalog[0]["installed_version"] == "v1.1.0"
     assert catalog[0]["available_version"] == "v1.1.0"
     assert catalog[0]["update_available"] is False
+    assert store.record.release_tag == "v1.1.0"
+    assert store.upsert_requests == 1
+    assert client.commit_requests == 0

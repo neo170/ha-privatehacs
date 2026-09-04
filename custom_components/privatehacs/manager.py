@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -111,6 +111,7 @@ class PrivateHacsManager:
                 if (
                     record is not None
                     and record.release_tag is None
+                    and record.lovelace_filename is not None
                     and latest_release is not None
                 ):
                     try:
@@ -120,9 +121,10 @@ class PrivateHacsManager:
                     except GitHubError:
                         release_commit = None
 
+            known_domains = set(remote_versions) | set(record.domains if record else ())
             local_component_versions = {
                 domain: local_versions[domain]
-                for domain in remote_versions
+                for domain in known_domains
                 if domain in local_versions
             }
             managed_by_privatehacs = record is not None
@@ -133,12 +135,20 @@ class PrivateHacsManager:
             installed_version = _installed_release_version(
                 record, available_version, local_component_versions, release_commit
             )
+            if (
+                record is not None
+                and record.release_tag is None
+                and installed_version == available_version
+                and installed_version is not None
+            ):
+                record = replace(record, release_tag=installed_version)
+                await self._store.async_upsert(record)
             release_update_available = bool(
                 managed_by_privatehacs
                 and available_version is not None
                 and installed_version != available_version
             )
-            domains = tuple(sorted(set(remote_versions) | set(record.domains if record else ())))
+            domains = tuple(sorted(known_domains))
             icon_domain = next(
                 (domain for domain in domains if domain in icon_domains), None
             )
@@ -437,7 +447,7 @@ def _installed_release_version(
         if all(versions_equal(version, available_version) for version in versions):
             return available_version
 
-    if record.commit_sha == release_commit:
+    if record.lovelace_filename is not None and record.commit_sha == release_commit:
         return available_version
     return None
 
