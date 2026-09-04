@@ -143,6 +143,11 @@ class _PrefixedReleaseClient(_Client):
         )
 
 
+class _UnavailableManifestClient(_PrefixedReleaseClient):
+    async def async_get_integration_versions(self, *_):
+        return {}
+
+
 def test_catalog_uses_the_last_loaded_state_until_refreshed(tmp_path: Path) -> None:
     """Repeated catalog reads avoid downloading the repository list again."""
     client = _Client()
@@ -586,4 +591,27 @@ def test_legacy_component_matching_the_release_is_current(tmp_path: Path) -> Non
 
     assert catalog[0]["installed_version"] == "1.1.0"
     assert catalog[0]["available_version"] == "1.1.0"
+    assert catalog[0]["update_available"] is False
+
+
+def test_legacy_component_matching_release_commit_is_current(tmp_path: Path) -> None:
+    """The installed commit identifies a release when manifest lookup is unavailable."""
+    record = InstalledRepository(
+        full_name="owner/ha-example",
+        default_branch="main",
+        commit_sha="commit-sha",
+        domains=("example",),
+        installed_at="2026-01-01T00:00:00+00:00",
+    )
+
+    catalog = asyncio.run(
+        PrivateHacsManager(
+            _Hass(tmp_path), _UnavailableManifestClient(), _ManagedStore(record)
+        ).async_get_catalog()
+    )
+
+    assert catalog[0]["local_versions"] == {}
+    assert catalog[0]["available_versions"] == {}
+    assert catalog[0]["installed_version"] == "v1.1.0"
+    assert catalog[0]["available_version"] == "v1.1.0"
     assert catalog[0]["update_available"] is False

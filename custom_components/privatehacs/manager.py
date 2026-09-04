@@ -111,7 +111,6 @@ class PrivateHacsManager:
                 if (
                     record is not None
                     and record.release_tag is None
-                    and record.lovelace_filename is not None
                     and latest_release is not None
                 ):
                     try:
@@ -438,7 +437,7 @@ def _installed_release_version(
         if all(versions_equal(version, available_version) for version in versions):
             return available_version
 
-    if record.lovelace_filename is not None and record.commit_sha == release_commit:
+    if record.commit_sha == release_commit:
         return available_version
     return None
 
